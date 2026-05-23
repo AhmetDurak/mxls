@@ -1,4 +1,4 @@
-import type { editor, languages, IRange } from 'monaco-editor'
+import type { MarkerSeverity, languages, IRange } from 'monaco-editor'
 
 /**
  * The Monaco API surface that mxls needs — injected at construction, never
@@ -42,6 +42,6 @@ export interface IMonacoApi {
 
     editor: {
         /** Used by SchemaDecorator (fallback main-thread path). */
-        MarkerSeverity: typeof editor.MarkerSeverity
+        MarkerSeverity: typeof MarkerSeverity
     }
 }

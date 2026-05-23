@@ -31,9 +31,6 @@ export interface ISchemaRegistry {
      * Returns all workers that should always be consulted regardless of
      * namespace matching (alwaysInclude) plus those whose includeIfRootTag
      * matches the current root tag.
-     *
-     * Callers (EditorPlugin) pass the root tag; ISchemaRegistry no longer holds
-     * an editor reference.
      */
     getAlwaysIncludedWorkers(rootTag: string | undefined): ISchemaWorker[]
 

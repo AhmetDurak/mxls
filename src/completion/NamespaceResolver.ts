@@ -12,15 +12,15 @@ export class NamespaceResolver {
 
     /**
      * Resolves which workers apply to `text` by matching its xmlns declarations
-     * to registered schemas in `xsdManager`.  Also includes always-included and
+     * to registered schemas in `registry`.  Also includes always-included and
      * root-tag-matched workers.
      */
-    resolve(text: string, xsdManager: ISchemaRegistry): ISchemaWorker[] {
+    resolve(text: string, registry: ISchemaRegistry): ISchemaWorker[] {
         const key = this.cacheKey(text)
         const hit = this.cache.get(key)
         if (hit) return hit
 
-        const workers = this.compute(text, xsdManager)
+        const workers = this.compute(text, registry)
         this.cache.set(key, workers)
         return workers
     }
@@ -36,7 +36,7 @@ export class NamespaceResolver {
         return matches.map(m => m[0]).sort().join('|')
     }
 
-    private compute(text: string, xsdManager: ISchemaRegistry): ISchemaWorker[] {
+    private compute(text: string, registry: ISchemaRegistry): ISchemaWorker[] {
         const result: ISchemaWorker[] = []
         const seen = new Set<string>()
 
@@ -45,7 +45,7 @@ export class NamespaceResolver {
         while ((m = nsRe.exec(text)) !== null) {
             const prefix = m[1] ?? ''
             const uri = m[2]
-            const worker = xsdManager.get(uri) ?? xsdManager.getNonStrict(uri)
+            const worker = registry.get(uri) ?? registry.getNonStrict(uri)
             if (worker && !seen.has(worker.xsd.path)) {
                 seen.add(worker.xsd.path)
                 result.push(prefix ? worker.withNamespace(prefix) : worker)
@@ -53,7 +53,7 @@ export class NamespaceResolver {
         }
 
         const rootTag = getRootTag(text)
-        for (const worker of xsdManager.getAlwaysIncludedWorkers(rootTag)) {
+        for (const worker of registry.getAlwaysIncludedWorkers(rootTag)) {
             if (!seen.has(worker.xsd.path)) {
                 seen.add(worker.xsd.path)
                 result.push(worker)

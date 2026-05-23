@@ -17,7 +17,7 @@ import {
 export class SchemaQuery implements ISchemaParser {
     constructor(private readonly index: SchemaIndex) {}
 
-    // ─── ISchemaParser ───────────────────────────────────────────────────────────
+    // ─── ISchemaParser ────────────────────────────────────────────────────────
 
     getRootElements(): DocumentNode[] {
         const schemaRoot = this.index.doc.documentElement as unknown as Element
@@ -127,7 +127,7 @@ export class SchemaQuery implements ISchemaParser {
         return ct ? this.detectContentModel(ct) : null
     }
 
-    // ─── Group / attributeGroup helpers (used by SchemaParser public API) ────────
+    // ─── Group / attributeGroup helpers ──────────────────────────────────────
 
     getElementsFromGroup(groupNode: DocumentNode): DocumentNode[] {
         const ref = groupNode.ref
@@ -147,12 +147,6 @@ export class SchemaQuery implements ISchemaParser {
 
     // ─── Context-aware resolution ─────────────────────────────────────────────
 
-    /**
-     * Walks the ancestor chain top-down to determine the exact type of
-     * `elementName` in the given context.
-     *
-     * ancestorChain = local names from root down to the direct parent of elementName.
-     */
     private resolveTypeInContext(
         elementName: string,
         ancestorChain: string[],
@@ -161,7 +155,6 @@ export class SchemaQuery implements ISchemaParser {
             return this.index.elementTypeMap.get(elementName)
         }
 
-        // Start from the root element's type
         let currentType = this.index.elementTypeMap.get(ancestorChain[0])
         for (let i = 1; i < ancestorChain.length; i++) {
             if (!currentType) return undefined
@@ -171,10 +164,6 @@ export class SchemaQuery implements ISchemaParser {
         return this.findChildType(elementName, currentType)
     }
 
-    /**
-     * Given a parent type name, finds the named child element within that type's
-     * content model and returns the child's type name.
-     */
     private findChildType(
         childName: string,
         parentTypeName: string,
@@ -196,7 +185,6 @@ export class SchemaQuery implements ISchemaParser {
         const typeAttr = match.getAttribute('type')
         if (typeAttr) return stripNsPrefix(typeAttr)
 
-        // Anonymous inline complexType
         return firstChildByLocalName(match, 'complexType')
             ? `__inline__${childName}`
             : undefined
@@ -204,12 +192,6 @@ export class SchemaQuery implements ISchemaParser {
 
     // ─── Content model traversal ──────────────────────────────────────────────
 
-    /**
-     * Recursively collects xs:element nodes reachable from `node`.
-     * - CONTAINER_LOCAL_NAMES: transparent — recurse into children
-     * - xs:choice with firstOnly=true: only the first branch is taken
-     * - xs:group: follow ref, guard cycles with `visited`
-     */
     private collectElements(
         node: Element,
         result: Element[],
@@ -240,10 +222,6 @@ export class SchemaQuery implements ISchemaParser {
         }
     }
 
-    /**
-     * For template generation: picks only the first element (or first group ref)
-     * from an xs:choice branch.
-     */
     private collectFirstBranchOfChoice(
         choice: Element,
         result: Element[],
@@ -258,7 +236,6 @@ export class SchemaQuery implements ISchemaParser {
         if (firstGroup) this.followGroupRef(firstGroup, result, visited, true)
     }
 
-    /** Resolves a group @ref and recurses into the named group's content. */
     private followGroupRef(
         groupNode: Element,
         result: Element[],
@@ -276,10 +253,6 @@ export class SchemaQuery implements ISchemaParser {
 
     // ─── Attribute traversal ──────────────────────────────────────────────────
 
-    /**
-     * Collects xs:attribute elements, following simpleContent / complexContent /
-     * extension / restriction chains and resolving attributeGroup refs.
-     */
     private collectAttributes(node: Element): Element[] {
         const result: Element[] = []
         for (const child of directChildElements(node)) {
@@ -350,7 +323,6 @@ export class SchemaQuery implements ISchemaParser {
         }
     }
 
-    /** Reads all non-xmlns attributes of an element as plain key-value pairs. */
     private readAttributes(el: Element): Record<string, string> {
         const result: Record<string, string> = {}
         for (let i = 0; i < el.attributes.length; i++) {
@@ -368,7 +340,6 @@ export class SchemaQuery implements ISchemaParser {
             const docNodes = child.getElementsByTagNameNS(XSD_NS, 'documentation')
             for (let i = 0; i < docNodes.length; i++) {
                 const docEl = docNodes[i] as unknown as Element
-                // xmldom stores text in firstChild.data; browsers use textContent
                 const text: string =
                     (docEl as unknown as { textContent?: string }).textContent ??
                     (docEl.firstChild as unknown as { data?: string } | null)?.data ??
@@ -389,10 +360,6 @@ export class SchemaQuery implements ISchemaParser {
         return typeName ? this.index.complexTypeMap.get(typeName) : undefined
     }
 
-    /**
-     * Attaches required attributes (and selfClose flag) to a list of DocumentNodes.
-     * Needed for template generation and snippet insertText.
-     */
     private withRequiredAttributes(nodes: DocumentNode[]): DocumentNode[] {
         return nodes.map(node => {
             const name = node.name ?? node.ref

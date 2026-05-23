@@ -1,8 +1,8 @@
 import { SchemaParser } from '../parser/SchemaParser'
 import { SchemaValidator } from './SchemaValidator'
 import type { IXsd, ValidationError } from '../types'
-import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
 import type { ISchemaParser } from '../interfaces/ISchemaParser'
+import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
 
 // ─── Message types ────────────────────────────────────────────────────────────
 

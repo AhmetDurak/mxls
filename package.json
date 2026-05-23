@@ -1,7 +1,7 @@
 {
   "name": "mxls",
   "version": "1.0.0",
-  "description": "Monaco XML Language Support — autocomplete, validation, template generation",
+  "description": "Monaco XML Language Support — schema-driven autocomplete, validation, and template generation",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "files": ["src", "style.css", "README.md"],

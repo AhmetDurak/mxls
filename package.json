@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "Monaco XML Language Support — schema-driven autocomplete, validation, and template generation",
   "license": "MIT",
+  "author": "Ahmet Durak",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AhmetDurak/mxls.git"
+  },
+  "homepage": "https://github.com/AhmetDurak/mxls#readme",
+  "keywords": ["monaco", "xml", "xsd", "autocomplete", "validation", "language-server", "editor"],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

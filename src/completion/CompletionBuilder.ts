@@ -28,11 +28,12 @@ export class CompletionBuilder {
         incomplete: boolean,
     ): ICompletion[] {
         const { CompletionItemKind, CompletionItemInsertTextRule } = this.monacoApi.languages
-        return nodes.map(node => {
+        return nodes.map((node, i) => {
             const name = node.name ?? ''
             const label = ns ? `${ns}:${name}` : name
             const reqAttrs = node.requiredAttribute ?? []
             const docText = docToMarkdown(node.documentation)
+            const sortText = String(i).padStart(6, '0')
 
             if (incomplete) {
                 return {
@@ -40,6 +41,7 @@ export class CompletionBuilder {
                     kind: CompletionItemKind.Property,
                     detail: node.type,
                     documentation: docText ? { value: docText } : undefined,
+                    sortText,
                     insertText: label,
                 }
             }
@@ -66,6 +68,7 @@ export class CompletionBuilder {
                 kind: CompletionItemKind.Property,
                 detail: node.type,
                 documentation: docText ? { value: docText } : undefined,
+                sortText,
                 insertText,
                 insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
             }
@@ -79,7 +82,7 @@ export class CompletionBuilder {
      */
     buildAttributes(nodes: DocumentNode[], incomplete: boolean): ICompletion[] {
         const { CompletionItemKind, CompletionItemInsertTextRule } = this.monacoApi.languages
-        return nodes.map(node => {
+        return nodes.map((node, i) => {
             const name = node.name ?? ''
             const docText = docToMarkdown(node.documentation)
             const isRequired = node.use === 'required'
@@ -88,6 +91,7 @@ export class CompletionBuilder {
                 kind: CompletionItemKind.Field,
                 detail: node.type,
                 documentation: docText ? { value: docText } : undefined,
+                sortText: String(i).padStart(6, '0'),
                 preselect: isRequired,
                 insertText: incomplete ? name : `${name}="$0"`,
                 insertTextRules: incomplete
@@ -100,9 +104,10 @@ export class CompletionBuilder {
     /** Build enum/string value completions for an attribute. */
     buildAttributeValues(values: string[]): ICompletion[] {
         const { CompletionItemKind } = this.monacoApi.languages
-        return values.map(v => ({
+        return values.map((v, i) => ({
             label: v,
             kind: CompletionItemKind.Enum,
+            sortText: String(i).padStart(6, '0'),
             insertText: v,
         }))
     }

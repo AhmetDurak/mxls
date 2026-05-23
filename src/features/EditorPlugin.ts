@@ -4,6 +4,7 @@ import type { ISchemaRegistry } from '../interfaces/ISchemaRegistry'
 import { SchemaCompleter } from '../completion/SchemaCompleter'
 import { SchemaDecorator } from '../validation/SchemaDecorator'
 import { TemplateBuilder } from '../template/TemplateBuilder'
+import { XmlFormatter } from '../formatter/XmlFormatter'
 import { getRootTag } from '../utils/XmlTextUtils'
 
 export interface EditorPluginOptions {
@@ -22,7 +23,10 @@ export class EditorPlugin {
     private readonly completer: SchemaCompleter
     private readonly decorator: SchemaDecorator
     private readonly template = new TemplateBuilder()
+    private readonly formatter = new XmlFormatter()
     private completionDisposable: { dispose(): void } | null = null
+    private reformatDisposable: { dispose(): void } | null = null
+    private generateDisposable: { dispose(): void } | null = null
 
     constructor(
         private readonly monacoApi: IMonacoApi,
@@ -70,11 +74,57 @@ export class EditorPlugin {
         model.setValue(xml)
     }
 
+    async reformatXml(): Promise<void> {
+        const model = this.codeEditor.getModel()
+        if (!model) return
+
+        const original = model.getValue()
+        let formatted: string
+        try {
+            formatted = await this.formatter.format(original)
+        } catch {
+            return
+        }
+
+        if (formatted === original) return
+
+        const fullRange = model.getFullModelRange()
+        model.pushEditOperations([], [{ range: fullRange, text: formatted }], () => null)
+    }
+
+    addReformatAction(): void {
+        this.reformatDisposable?.dispose()
+        this.reformatDisposable = this.codeEditor.addAction({
+            id: 'mxls.reformat',
+            label: 'Reformat XML',
+            keybindings: [this.monacoApi.KeyMod.CtrlCmd | this.monacoApi.KeyMod.Shift | this.monacoApi.KeyCode.KeyF],
+            contextMenuGroupId: '1_modification',
+            contextMenuOrder: 1,
+            run: () => { void this.reformatXml() },
+        })
+    }
+
+    addGenerateAction(): void {
+        this.generateDisposable?.dispose()
+        this.generateDisposable = this.codeEditor.addAction({
+            id: 'mxls.generate',
+            label: 'Generate XML Template',
+            keybindings: [this.monacoApi.KeyMod.CtrlCmd | this.monacoApi.KeyMod.Shift | this.monacoApi.KeyCode.KeyG],
+            contextMenuGroupId: '1_modification',
+            contextMenuOrder: 2,
+            run: () => { this.generateTemplate(true) },
+        })
+    }
+
     /** Unregister the completion provider and clear all validation decorations. */
     dispose(): void {
         this.decorator.dispose()
         this.completionDisposable?.dispose()
         this.completionDisposable = null
+        this.reformatDisposable?.dispose()
+        this.reformatDisposable = null
+        this.generateDisposable?.dispose()
+        this.generateDisposable = null
     }
 
     private revalidate(): void {

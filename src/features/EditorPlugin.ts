@@ -5,6 +5,7 @@ import { SchemaCompleter } from '../completion/SchemaCompleter'
 import { SchemaDecorator } from '../validation/SchemaDecorator'
 import { TemplateBuilder } from '../template/TemplateBuilder'
 import { XmlFormatter } from '../formatter/XmlFormatter'
+import { SchemaHover } from '../hover/SchemaHover'
 import { getRootTag } from '../utils/XmlTextUtils'
 
 export interface EditorPluginOptions {
@@ -24,7 +25,9 @@ export class EditorPlugin {
     private readonly decorator: SchemaDecorator
     private readonly template = new TemplateBuilder()
     private readonly formatter = new XmlFormatter()
+    private readonly hover: SchemaHover
     private completionDisposable: { dispose(): void } | null = null
+    private hoverDisposable: { dispose(): void } | null = null
     private reformatDisposable: { dispose(): void } | null = null
     private generateDisposable: { dispose(): void } | null = null
 
@@ -36,13 +39,18 @@ export class EditorPlugin {
     ) {
         this.completer = new SchemaCompleter(registry, monacoApi)
         this.decorator = new SchemaDecorator(monacoApi, codeEditor)
+        this.hover = new SchemaHover(registry)
     }
 
-    /** Register the completion provider and run the first validation pass. */
+    /** Register the completion and hover providers and run the first validation pass. */
     activate(): void {
         this.completionDisposable = this.monacoApi.languages.registerCompletionItemProvider(
             'xml',
             this.completer.provider(),
+        )
+        this.hoverDisposable = this.monacoApi.languages.registerHoverProvider(
+            'xml',
+            this.hover.provider(),
         )
         this.revalidate()
     }
@@ -116,11 +124,13 @@ export class EditorPlugin {
         })
     }
 
-    /** Unregister the completion provider and clear all validation decorations. */
+    /** Unregister all providers and clear all validation decorations. */
     dispose(): void {
         this.decorator.dispose()
         this.completionDisposable?.dispose()
         this.completionDisposable = null
+        this.hoverDisposable?.dispose()
+        this.hoverDisposable = null
         this.reformatDisposable?.dispose()
         this.reformatDisposable = null
         this.generateDisposable?.dispose()

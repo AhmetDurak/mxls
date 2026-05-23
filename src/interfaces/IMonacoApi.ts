@@ -38,6 +38,11 @@ export interface IMonacoApi {
             languageId: string,
             provider: languages.CompletionItemProvider,
         ): { dispose(): void }
+
+        registerHoverProvider(
+            languageId: string,
+            provider: languages.HoverProvider,
+        ): { dispose(): void }
     }
 
     editor: {

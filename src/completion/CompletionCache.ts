@@ -1,12 +1,17 @@
 import type { ICompletion } from '../types'
-import { CompletionType } from '../types'
 
-/** Memoizes completion results by context key: `type:ancestor>…>parent`. */
+/**
+ * Instance-based memoization of completion results.
+ * Key: `[...ancestorChain, parentElement].join('>')` when chain is non-empty,
+ * else just `parentElement`.
+ */
 export class CompletionCache {
     private readonly cache = new Map<string, ICompletion[]>()
 
-    makeKey(completionType: CompletionType, parentTag: string, ancestorChain: string[]): string {
-        return `${completionType}:${ancestorChain.join('>')}>${parentTag}`
+    makeKey(parentTag: string, ancestorChain: string[]): string {
+        return ancestorChain.length > 0
+            ? [...ancestorChain, parentTag].join('>')
+            : parentTag
     }
 
     get(key: string): ICompletion[] | undefined {

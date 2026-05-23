@@ -1,51 +1,62 @@
 import type { ISchemaRegistry } from '../interfaces/ISchemaRegistry'
 import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
-import type { INamespaceInfo } from '../types'
+import { getRootTag } from '../utils/XmlTextUtils'
 
-export interface WorkerWithPrefix {
-    worker: ISchemaWorker
-    prefix: string
-}
-
-/** Instance-based (no static state) xmlns extraction and worker selection. */
+/**
+ * Instance-based (no static state) XML namespace resolver.
+ * Extracts xmlns declarations from the document text and maps them to registered
+ * XSD workers.  Results are cached by the xmlns fingerprint of the text.
+ */
 export class NamespaceResolver {
-    /** Extracts all xmlns declarations from the XML text. */
-    extractNamespaces(xmlText: string): INamespaceInfo[] {
-        const results: INamespaceInfo[] = []
-        // Matches xmlns="uri" and xmlns:prefix="uri"
-        const nsRe = /xmlns(?::([a-zA-Z_][\w.-]*))?="([^"]+)"/g
-        let match: RegExpExecArray | null
-        while ((match = nsRe.exec(xmlText)) !== null) {
-            results.push({ prefix: match[1] ?? '', path: match[2] })
-        }
-        return results
-    }
+    private readonly cache = new Map<string, ISchemaWorker[]>()
 
     /**
-     * Resolves the workers that apply to the current document.
-     * Workers are matched by namespace URI (exact then non-strict path lookup).
-     * Always-included and root-tag-matched workers are appended if not already present.
+     * Resolves which workers apply to `text` by matching its xmlns declarations
+     * to registered schemas in `xsdManager`.  Also includes always-included and
+     * root-tag-matched workers.
      */
-    getActiveWorkers(
-        xmlText: string,
-        manager: ISchemaRegistry,
-        rootTag: string | undefined,
-    ): WorkerWithPrefix[] {
-        const result: WorkerWithPrefix[] = []
-        const seenPaths = new Set<string>()
+    resolve(text: string, xsdManager: ISchemaRegistry): ISchemaWorker[] {
+        const key = this.cacheKey(text)
+        const hit = this.cache.get(key)
+        if (hit) return hit
 
-        for (const ns of this.extractNamespaces(xmlText)) {
-            const worker = manager.get(ns.path) ?? manager.getNonStrict(ns.path)
-            if (worker && !seenPaths.has(worker.xsd.path)) {
-                seenPaths.add(worker.xsd.path)
-                result.push({ worker, prefix: ns.prefix })
+        const workers = this.compute(text, xsdManager)
+        this.cache.set(key, workers)
+        return workers
+    }
+
+    /** Clear the cache (call when schemas are added, removed, or updated). */
+    invalidate(): void {
+        this.cache.clear()
+    }
+
+    private cacheKey(text: string): string {
+        // Cache by the sorted set of xmlns declarations — changes rarely
+        const matches = [...text.matchAll(/xmlns(?::[a-zA-Z_][\w.-]*)?="[^"]+"/g)]
+        return matches.map(m => m[0]).sort().join('|')
+    }
+
+    private compute(text: string, xsdManager: ISchemaRegistry): ISchemaWorker[] {
+        const result: ISchemaWorker[] = []
+        const seen = new Set<string>()
+
+        const nsRe = /xmlns(?::([a-zA-Z_][\w.-]*))?="([^"]+)"/g
+        let m: RegExpExecArray | null
+        while ((m = nsRe.exec(text)) !== null) {
+            const prefix = m[1] ?? ''
+            const uri = m[2]
+            const worker = xsdManager.get(uri) ?? xsdManager.getNonStrict(uri)
+            if (worker && !seen.has(worker.xsd.path)) {
+                seen.add(worker.xsd.path)
+                result.push(prefix ? worker.withNamespace(prefix) : worker)
             }
         }
 
-        for (const worker of manager.getAlwaysIncludedWorkers(rootTag)) {
-            if (!seenPaths.has(worker.xsd.path)) {
-                seenPaths.add(worker.xsd.path)
-                result.push({ worker, prefix: '' })
+        const rootTag = getRootTag(text)
+        for (const worker of xsdManager.getAlwaysIncludedWorkers(rootTag)) {
+            if (!seen.has(worker.xsd.path)) {
+                seen.add(worker.xsd.path)
+                result.push(worker)
             }
         }
 

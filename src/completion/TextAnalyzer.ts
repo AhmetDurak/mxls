@@ -1,25 +1,22 @@
 import { CompletionType } from '../types'
-import { getUnclosedTags, stripNsPrefix } from '../utils/XmlTextUtils'
+import {
+    getUnclosedTags,
+    stripNsPrefix,
+    extractCurrentAttributeName,
+} from '../utils/XmlTextUtils'
 
-export interface CursorContext {
-    completionType: CompletionType
-    /** The innermost open tag the cursor is inside of (or typing into). */
-    parentTag: string
-    /** Ancestors of parentTag, outermost first. */
-    ancestorChain: string[]
-}
+// ─── Internal bracket scan ────────────────────────────────────────────────────
 
-interface ScanResult {
-    lastOpenBracket: number
-    lastCloseBracket: number
-    /** True when cursor is inside an unclosed attribute value quote. */
+interface Scan {
+    lastOpen: number
+    lastClose: number
     inString: boolean
 }
 
-function scanBrackets(text: string): ScanResult {
+function scan(text: string): Scan {
     let inStr: string | null = null
-    let lastOpenBracket = -1
-    let lastCloseBracket = -1
+    let lastOpen = -1
+    let lastClose = -1
 
     for (let i = 0; i < text.length; i++) {
         const ch = text[i]
@@ -28,101 +25,105 @@ function scanBrackets(text: string): ScanResult {
         } else if (ch === '"' || ch === "'") {
             inStr = ch
         } else if (ch === '<') {
-            lastOpenBracket = i
+            lastOpen = i
         } else if (ch === '>') {
-            lastCloseBracket = i
+            lastClose = i
         }
     }
 
-    return { lastOpenBracket, lastCloseBracket, inString: inStr !== null }
+    return { lastOpen, lastClose, inString: inStr !== null }
 }
 
-function toLocalNames(tags: string[]): string[] {
-    return tags.map(stripNsPrefix)
-}
+function deriveType(text: string): CompletionType {
+    const { lastOpen, lastClose, inString } = scan(text)
 
-/**
- * Analyzes the text from document start to the cursor position and returns
- * the completion context: what kind of completion is needed, what is the
- * parent element, and the full ancestor chain.
- */
-export function analyzeContext(text: string): CursorContext {
-    const { lastOpenBracket, lastCloseBracket, inString } = scanBrackets(text)
-    const insideTag =
-        lastOpenBracket !== -1 && lastOpenBracket > lastCloseBracket
+    if (inString) return CompletionType.attributeValue
 
-    // ── Attribute value ────────────────────────────────────────────────────────
-    if (inString) {
-        const beforeOpen = text.slice(0, lastOpenBracket)
-        const inside = text.slice(lastOpenBracket + 1)
-        const tagName = /^([a-zA-Z_][\w:.-]*)/.exec(inside)?.[1] ?? ''
-        const ancestors = toLocalNames(getUnclosedTags(beforeOpen))
-        return {
-            completionType: CompletionType.attributeValue,
-            parentTag: stripNsPrefix(tagName),
-            ancestorChain: ancestors,
-        }
-    }
+    const insideTag = lastOpen !== -1 && lastOpen > lastClose
+    if (!insideTag) return CompletionType.element
 
-    // ── Between tags (element completion) ──────────────────────────────────────
-    if (!insideTag) {
-        const unclosed = toLocalNames(getUnclosedTags(text))
-        return {
-            completionType: CompletionType.element,
-            parentTag: unclosed[unclosed.length - 1] ?? '',
-            ancestorChain: unclosed.slice(0, -1),
-        }
-    }
+    const inside = text.slice(lastOpen + 1)
+    if (inside.startsWith('/')) return CompletionType.closingElement
 
-    // ── Inside an unclosed '<…' ────────────────────────────────────────────────
-    const inside = text.slice(lastOpenBracket + 1)
-    const beforeOpen = text.slice(0, lastOpenBracket)
-
-    // Closing tag: '</'
-    if (inside.startsWith('/')) {
-        const unclosed = toLocalNames(getUnclosedTags(text))
-        return {
-            completionType: CompletionType.closingElement,
-            parentTag: unclosed[unclosed.length - 1] ?? '',
-            ancestorChain: unclosed.slice(0, -1),
-        }
-    }
-
-    const tagName = /^([a-zA-Z_][\w:.-]*)/.exec(inside)?.[1] ?? ''
-    // Still typing the element name when there is no whitespace after '<' (or '<' alone)
     const hasSpaceAfterName = /^(?:[a-zA-Z_][\w:.-]*)?\s/.test(inside)
+    if (!hasSpaceAfterName) return CompletionType.incompleteElement
 
-    if (!hasSpaceAfterName) {
-        const ancestors = toLocalNames(getUnclosedTags(beforeOpen))
-        return {
-            completionType: CompletionType.incompleteElement,
-            parentTag: ancestors[ancestors.length - 1] ?? '',
-            ancestorChain: ancestors.slice(0, -1),
+    return CompletionType.incompleteAttribute
+}
+
+// ─── TextAnalyzer ─────────────────────────────────────────────────────────────
+
+/** Pure cursor-context analyzer — zero Monaco imports. */
+export class TextAnalyzer {
+    /**
+     * Returns the completion type appropriate for the given text and Monaco
+     * trigger information.  `triggerKind` 1 = triggerCharacter; 0 = Invoke.
+     */
+    getCompletionType(
+        text: string,
+        triggerKind: number,
+        triggerChar?: string,
+    ): CompletionType {
+        if (triggerKind === 1 && triggerChar) {
+            switch (triggerChar) {
+                case '<':
+                    return text.trimEnd().endsWith('</')
+                        ? CompletionType.closingElement
+                        : CompletionType.element
+                case '/':
+                    return CompletionType.closingElement
+                case '=':
+                case '"':
+                case "'":
+                    return CompletionType.attributeValue
+                case ' ':
+                    return CompletionType.incompleteAttribute
+            }
         }
+        return deriveType(text)
     }
 
-    // Inside the attributes region of a tag
-    const ancestors = toLocalNames(getUnclosedTags(beforeOpen))
-    return {
-        completionType: CompletionType.incompleteAttribute,
-        parentTag: stripNsPrefix(tagName),
-        ancestorChain: ancestors,
+    /** Innermost unclosed element name (NS-stripped), or undefined. */
+    getParentTag(text: string): string | undefined {
+        const tags = this.getUnclosedTags(text)
+        const last = tags[tags.length - 1]
+        return last ? stripNsPrefix(last) : undefined
     }
-}
 
-export function getCompletionType(text: string): CompletionType {
-    return analyzeContext(text).completionType
-}
+    /**
+     * All unclosed tags minus the innermost, with namespace prefix stripped.
+     * Represents the ancestor chain of the element being edited.
+     */
+    getAncestorChain(text: string): string[] {
+        const tags = this.getUnclosedTags(text)
+        return tags.slice(0, -1).map(stripNsPrefix)
+    }
 
-export function getParentTag(text: string): string {
-    return analyzeContext(text).parentTag
-}
+    /** Full NS-prefixed unclosed-tag stack (as returned by XML text utils). */
+    getUnclosedTags(text: string): string[] {
+        return getUnclosedTags(text)
+    }
 
-export function getAncestorChain(text: string): string[] {
-    return analyzeContext(text).ancestorChain
-}
+    isInsideOpenTag(text: string): boolean {
+        const t = deriveType(text)
+        return t === CompletionType.incompleteAttribute || t === CompletionType.attributeValue
+    }
 
-export function isInsideOpenTag(text: string): boolean {
-    const t = getCompletionType(text)
-    return t === CompletionType.incompleteAttribute || t === CompletionType.attributeValue
+    /** Returns the attribute name whose value the cursor is currently inside. */
+    getAttrNameBeforeCursor(text: string): string | undefined {
+        return extractCurrentAttributeName(text) ?? undefined
+    }
+
+    /**
+     * Counts how many times `childTag` appears as a direct child of the current
+     * open `parentTag` scope (best-effort approximation based on text).
+     */
+    countChildOccurrences(text: string, parentTag: string, childTag: string): number {
+        const lastParentOpen = text.lastIndexOf(`<${parentTag}`)
+        if (lastParentOpen < 0) return 0
+        const scope = text.slice(lastParentOpen)
+        const escaped = childTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const re = new RegExp(`<${escaped}[\\s>\/]`, 'g')
+        return (scope.match(re) ?? []).length
+    }
 }

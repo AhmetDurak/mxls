@@ -3,171 +3,130 @@ import type { IMonacoApi } from '../interfaces/IMonacoApi'
 import type { ISchemaRegistry } from '../interfaces/ISchemaRegistry'
 import type { ICompletion } from '../types'
 import { CompletionType } from '../types'
-import { analyzeContext } from './TextAnalyzer'
+import { TextAnalyzer } from './TextAnalyzer'
 import { CompletionBuilder } from './CompletionBuilder'
 import { CompletionCache } from './CompletionCache'
-import { NamespaceResolver, type WorkerWithPrefix } from './NamespaceResolver'
-import {
-    getRootTag,
-    extractUsedAttributes,
-    extractCurrentAttributeName,
-} from '../utils/XmlTextUtils'
+import { NamespaceResolver } from './NamespaceResolver'
 
-/** Thin Monaco completion-provider shell. Delegates all logic to pure helpers. */
+/**
+ * Thin Monaco CompletionItemProvider shell.
+ * All analysis is delegated to TextAnalyzer; all item construction to workers
+ * (via doCompletion) and CompletionBuilder.
+ */
 export class SchemaCompleter {
+    private readonly analyzer = new TextAnalyzer()
     private readonly builder: CompletionBuilder
-    private readonly cache: CompletionCache
-    private readonly resolver: NamespaceResolver
-    private disposable: { dispose(): void } | undefined
+    private readonly cache = new CompletionCache()
+    private readonly resolver = new NamespaceResolver()
 
     constructor(
-        private readonly monaco: IMonacoApi,
-        private readonly manager: ISchemaRegistry,
+        private readonly xsdManager: ISchemaRegistry,
+        monacoApi: IMonacoApi,
     ) {
-        this.builder = new CompletionBuilder(monaco)
-        this.cache = new CompletionCache()
-        this.resolver = new NamespaceResolver()
+        this.builder = new CompletionBuilder(monacoApi)
     }
 
-    /** Registers the provider with Monaco. Call once after construction. */
-    register(): void {
-        this.disposable = this.monaco.languages.registerCompletionItemProvider('xml', {
+    /** Returns the Monaco CompletionItemProvider to register. */
+    provider(): languages.CompletionItemProvider {
+        return {
             triggerCharacters: ['<', ' ', '/', '=', '"', "'"],
-            provideCompletionItems: (model, position) => {
+            provideCompletionItems: (model, position, context) => {
                 const fullText = model.getValue()
-                const textUntilPosition = model.getValueInRange({
+                const text = model.getValueInRange({
                     startLineNumber: 1,
                     startColumn: 1,
                     endLineNumber: position.lineNumber,
                     endColumn: position.column,
                 })
 
-                const context = analyzeContext(textUntilPosition)
-                if (context.completionType === CompletionType.none) return { suggestions: [] }
+                const type = this.analyzer.getCompletionType(
+                    text,
+                    context.triggerKind,
+                    context.triggerCharacter,
+                )
+                if (type === CompletionType.none) return { suggestions: [] }
 
-                const rootTag = getRootTag(fullText)
-                const workers = this.resolver.getActiveWorkers(fullText, this.manager, rootTag)
+                const workers = this.resolver.resolve(fullText, this.xsdManager)
                 if (workers.length === 0) return { suggestions: [] }
 
-                // Attribute-value completions depend on the attribute name — skip cache
-                if (context.completionType !== CompletionType.attributeValue) {
-                    const key = this.cache.makeKey(
-                        context.completionType,
-                        context.parentTag,
-                        context.ancestorChain,
-                    )
-                    const cached = this.cache.get(key)
-                    if (cached) return { suggestions: cached as unknown as languages.CompletionItem[] }
+                const parentTag = this.analyzer.getParentTag(text) ?? ''
+                const ancestorChain = this.analyzer.getAncestorChain(text)
 
-                    const suggestions = this.gatherSuggestions(
-                        context.completionType,
-                        context.parentTag,
-                        context.ancestorChain,
-                        workers,
-                        textUntilPosition,
-                    )
-                    this.cache.set(key, suggestions)
-                    return { suggestions: suggestions as unknown as languages.CompletionItem[] }
+                // Cache element/attribute completions; skip for attribute values
+                if (
+                    type !== CompletionType.attributeValue &&
+                    type !== CompletionType.closingElement
+                ) {
+                    const key = this.cache.makeKey(parentTag, ancestorChain)
+                    const hit = this.cache.get(key)
+                    if (hit) return { suggestions: hit as unknown as languages.CompletionItem[] }
+
+                    const items = this.gather(type, parentTag, ancestorChain, workers, text)
+                    this.cache.set(key, items)
+                    return { suggestions: items as unknown as languages.CompletionItem[] }
                 }
 
                 return {
-                    suggestions: this.gatherSuggestions(
-                        context.completionType,
-                        context.parentTag,
-                        context.ancestorChain,
+                    suggestions: this.gather(
+                        type,
+                        parentTag,
+                        ancestorChain,
                         workers,
-                        textUntilPosition,
+                        text,
                     ) as unknown as languages.CompletionItem[],
                 }
             },
-        })
+        }
     }
 
-    /** Invalidate the completion cache (call when a schema is added or updated). */
+    /** Invalidate the cache (call when a schema is added or updated). */
     invalidateCache(): void {
         this.cache.clear()
+        this.resolver.invalidate()
     }
 
-    dispose(): void {
-        this.disposable?.dispose()
-        this.cache.clear()
-    }
-
-    private gatherSuggestions(
-        completionType: CompletionType,
+    private gather(
+        type: CompletionType,
         parentTag: string,
         ancestorChain: string[],
-        workers: WorkerWithPrefix[],
-        textUntilPosition: string,
+        workers: ReturnType<NamespaceResolver['resolve']>,
+        text: string,
     ): ICompletion[] {
-        switch (completionType) {
+        switch (type) {
             case CompletionType.element:
-            case CompletionType.incompleteElement:
-                return this.elementSuggestions(parentTag, ancestorChain, workers)
+            case CompletionType.incompleteElement: {
+                const results: ICompletion[] = []
+                for (const worker of workers) {
+                    results.push(...worker.doCompletion(type, parentTag, ancestorChain))
+                }
+                return results
+            }
 
             case CompletionType.attribute:
-            case CompletionType.incompleteAttribute:
-                return this.attributeSuggestions(parentTag, workers, textUntilPosition)
+            case CompletionType.incompleteAttribute: {
+                const results: ICompletion[] = []
+                for (const worker of workers) {
+                    results.push(...worker.doCompletion(CompletionType.attribute, parentTag, ancestorChain))
+                }
+                return results
+            }
 
-            case CompletionType.attributeValue:
-                return this.attributeValueSuggestions(parentTag, workers, textUntilPosition)
+            case CompletionType.attributeValue: {
+                const attrName = this.analyzer.getAttrNameBeforeCursor(text)
+                if (!attrName) return []
+                const results: ICompletion[] = []
+                for (const worker of workers) {
+                    const values = worker.getEnumValuesForAttribute(parentTag, attrName)
+                    results.push(...this.builder.buildAttributeValues(values))
+                }
+                return results
+            }
 
             case CompletionType.closingElement:
-                return this.closingTagSuggestions(parentTag)
+                return parentTag ? [this.builder.buildClosingTag(parentTag)] : []
 
             default:
                 return []
         }
-    }
-
-    private elementSuggestions(
-        parentTag: string,
-        ancestorChain: string[],
-        workers: WorkerWithPrefix[],
-    ): ICompletion[] {
-        const results: ICompletion[] = []
-        for (const { worker, prefix } of workers) {
-            const nodes = parentTag
-                ? worker.getSubElements(parentTag, ancestorChain)
-                : worker.getRootElements()
-            results.push(...this.builder.buildElementCompletions(nodes, prefix))
-        }
-        return results
-    }
-
-    private attributeSuggestions(
-        parentTag: string,
-        workers: WorkerWithPrefix[],
-        textUntilPosition: string,
-    ): ICompletion[] {
-        const usedAttrs = extractUsedAttributes(textUntilPosition)
-        const results: ICompletion[] = []
-        for (const { worker } of workers) {
-            const attrs = worker.getAttributesForElement(parentTag)
-            results.push(...this.builder.buildAttributeCompletions(attrs, usedAttrs))
-        }
-        return results
-    }
-
-    private attributeValueSuggestions(
-        parentTag: string,
-        workers: WorkerWithPrefix[],
-        textUntilPosition: string,
-    ): ICompletion[] {
-        const attrName = extractCurrentAttributeName(textUntilPosition)
-        if (!attrName) return []
-        const results: ICompletion[] = []
-        for (const { worker } of workers) {
-            const values = worker.getEnumValuesForAttribute(parentTag, attrName)
-            results.push(...this.builder.buildEnumCompletions(values))
-        }
-        return results
-    }
-
-    private closingTagSuggestions(parentTag: string): ICompletion[] {
-        if (!parentTag) return []
-        // Closing tag prefix cannot be reliably recovered from the stripped ancestor
-        // stack — emit without prefix; EditorPlugin may enhance this later.
-        return [this.builder.buildClosingTagCompletion(parentTag, '')]
     }
 }

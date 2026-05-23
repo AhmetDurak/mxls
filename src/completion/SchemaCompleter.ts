@@ -92,6 +92,12 @@ export class SchemaCompleter {
         workers: ReturnType<NamespaceResolver['resolve']>,
         text: string,
     ): ICompletion[] {
+        // For attribute completions the cursor is inside an unclosed opening tag,
+        // so getParentTag (which tracks *closed* tags) returns the wrong element.
+        // getCurrentOpenTagName returns the element whose `<tagName` has not yet
+        // received its closing `>` — the correct target for attribute queries.
+        const openTag = this.analyzer.getCurrentOpenTagName(text)
+
         switch (type) {
             case CompletionType.element:
             case CompletionType.incompleteElement: {
@@ -104,9 +110,10 @@ export class SchemaCompleter {
 
             case CompletionType.attribute:
             case CompletionType.incompleteAttribute: {
+                const tagName = openTag ?? parentTag
                 const results: ICompletion[] = []
                 for (const worker of workers) {
-                    results.push(...worker.doCompletion(CompletionType.attribute, parentTag, ancestorChain))
+                    results.push(...worker.doCompletion(CompletionType.attribute, tagName, ancestorChain))
                 }
                 return results
             }
@@ -114,9 +121,10 @@ export class SchemaCompleter {
             case CompletionType.attributeValue: {
                 const attrName = this.analyzer.getAttrNameBeforeCursor(text)
                 if (!attrName) return []
+                const tagName = openTag ?? parentTag
                 const results: ICompletion[] = []
                 for (const worker of workers) {
-                    const values = worker.getEnumValuesForAttribute(parentTag, attrName)
+                    const values = worker.getEnumValuesForAttribute(tagName, attrName)
                     results.push(...this.builder.buildAttributeValues(values))
                 }
                 return results

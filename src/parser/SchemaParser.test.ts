@@ -169,6 +169,58 @@ const CONTENT_MODEL_XSD = makeXsd(`<?xml version="1.0"?>
   <xs:element name="SimpleEl" type="SimpleType"/>
 </xs:schema>`)
 
+/**
+ * Same element name (Block / Inner) appears with different concrete types
+ * depending on ancestor context — exercises multi-typed context-aware resolution.
+ */
+const MULTI_TYPE_XSD = makeXsd(`<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="Root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="SectionA">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="Block" type="BlockTypeA"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="SectionB" type="SectionBType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="SectionBType">
+    <xs:choice>
+      <xs:element name="Block" type="BlockTypeB"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:complexType name="BlockTypeA">
+    <xs:sequence>
+      <xs:element name="Inner" type="InnerTypeA"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="BlockTypeB">
+    <xs:sequence>
+      <xs:element name="Inner" type="InnerTypeB"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="InnerTypeA">
+    <xs:sequence>
+      <xs:element name="LeafA" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="InnerTypeB">
+    <xs:sequence>
+      <xs:element name="LeafB" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`)
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('SchemaParser', () => {
@@ -209,6 +261,38 @@ describe('SchemaParser', () => {
 
     // 3. Context-aware resolution
     describe('getSubElements with ancestorChain', () => {
+        // Same element name (Block/Inner) with different types per context
+        it('resolves Block under SectionA to BlockTypeA children', () => {
+            const parser = new SchemaParser(MULTI_TYPE_XSD)
+            const children = parser.getSubElements('Block', ['Root', 'SectionA'])
+            const names = children.map(c => c.name)
+            expect(names).toContain('Inner')
+        })
+
+        it('resolves Inner deep in Root/SectionA/Block to LeafA only', () => {
+            const parser = new SchemaParser(MULTI_TYPE_XSD)
+            const children = parser.getSubElements('Inner', ['Root', 'SectionA', 'Block'])
+            const names = children.map(c => c.name)
+            expect(names).toContain('LeafA')
+            expect(names).not.toContain('LeafB')
+        })
+
+        it('resolves Inner in Root/SectionB/Block context to LeafB only', () => {
+            const parser = new SchemaParser(MULTI_TYPE_XSD)
+            const children = parser.getSubElements('Inner', ['Root', 'SectionB', 'Block'])
+            const names = children.map(c => c.name)
+            expect(names).toContain('LeafB')
+            expect(names).not.toContain('LeafA')
+        })
+
+        it('falls back to union of both leaf types when no ancestor chain given', () => {
+            const parser = new SchemaParser(MULTI_TYPE_XSD)
+            const children = parser.getSubElements('Inner')
+            const names = children.map(c => c.name)
+            expect(names).toContain('LeafA')
+            expect(names).toContain('LeafB')
+        })
+
         it('resolves correct children when Inner is under ChildA', () => {
             const parser = new SchemaParser(CONTEXT_XSD)
             // ancestorChain = path from root down to direct parent of "Inner"

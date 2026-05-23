@@ -109,6 +109,21 @@ export class TextAnalyzer {
         return t === CompletionType.incompleteAttribute || t === CompletionType.attributeValue
     }
 
+    /**
+     * Name of the element whose opening tag the cursor is currently inside.
+     * Unlike getParentTag (which returns the innermost *closed* element),
+     * this returns the element whose `<tagName` has not yet received its closing `>`.
+     * Returns undefined when the cursor is not inside an unclosed opening tag.
+     */
+    getCurrentOpenTagName(text: string): string | undefined {
+        const { lastOpen, lastClose } = scan(text)
+        if (lastOpen === -1 || lastOpen <= lastClose) return undefined
+        const inside = text.slice(lastOpen + 1)
+        if (inside.startsWith('/')) return undefined
+        const match = /^([a-zA-Z_][\w:.-]*)/.exec(inside)
+        return match ? stripNsPrefix(match[1]) : undefined
+    }
+
     /** Returns the attribute name whose value the cursor is currently inside. */
     getAttrNameBeforeCursor(text: string): string | undefined {
         return extractCurrentAttributeName(text) ?? undefined

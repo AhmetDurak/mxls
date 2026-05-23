@@ -93,6 +93,36 @@ describe('TextAnalyzer', () => {
         })
     })
 
+    describe('getCurrentOpenTagName', () => {
+        it('empty text → undefined', () => {
+            expect(analyzer.getCurrentOpenTagName('')).toBeUndefined()
+        })
+
+        it('after closed tag → undefined', () => {
+            expect(analyzer.getCurrentOpenTagName('<Root>')).toBeUndefined()
+        })
+
+        it('cursor inside unclosed opening tag → tag name', () => {
+            expect(analyzer.getCurrentOpenTagName('<Parameter ')).toBe('Parameter')
+        })
+
+        it('cursor inside attribute value of unclosed tag → tag name', () => {
+            expect(analyzer.getCurrentOpenTagName('<Parameter name="')).toBe('Parameter')
+        })
+
+        it('namespaced tag → strips prefix', () => {
+            expect(analyzer.getCurrentOpenTagName('<ns:Root attr="')).toBe('Root')
+        })
+
+        it('closing tag → undefined', () => {
+            expect(analyzer.getCurrentOpenTagName('<Root></Root></')).toBeUndefined()
+        })
+
+        it('nested: cursor inside inner open tag → inner name', () => {
+            expect(analyzer.getCurrentOpenTagName('<Root><Parameters><Parameter name="')).toBe('Parameter')
+        })
+    })
+
     describe('getAttrNameBeforeCursor', () => {
         it('no attribute value open → undefined', () => {
             expect(analyzer.getAttrNameBeforeCursor('<Root ')).toBeUndefined()

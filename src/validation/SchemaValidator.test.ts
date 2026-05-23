@@ -66,9 +66,24 @@ function makeWorker(xsd: IXsd): ISchemaWorker {
     return w
 }
 
+const PATTERN_XSD = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="Item">
+    <xs:complexType>
+      <xs:attribute name="code">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[A-Z]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>`
+
 const mainXsd: IXsd = { path: 'main.xsd', value: MAIN_XSD }
 const boolXsd: IXsd = { path: 'bool.xsd', value: BOOLEAN_XSD }
 const choiceXsd: IXsd = { path: 'choice.xsd', value: CHOICE_XSD }
+const patternXsd: IXsd = { path: 'pattern.xsd', value: PATTERN_XSD }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -151,5 +166,26 @@ describe('SchemaValidator', () => {
         const errors = validator.validate(xml, [mainWorker])
         const ghostErrors = errors.filter(e => e.message.includes('Ghost'))
         expect(ghostErrors.length).toBe(1)
+    })
+
+    // 11. Duplicate attributes ─────────────────────────────────────────────────
+    it('reports duplicate attribute names', () => {
+        const xml = '<Root id="1" id="2"><Child id="x"/></Root>'
+        const errors = validator.validate(xml, [])
+        expect(errors.some(e => e.message.includes('Duplicate attribute') && e.message.includes('"id"'))).toBe(true)
+    })
+
+    // 12. xs:pattern violation ─────────────────────────────────────────────────
+    it('accepts value matching xs:pattern', () => {
+        const patternWorker = makeWorker(patternXsd)
+        const xml = '<Item code="ABC"/>'
+        expect(validator.validate(xml, [patternWorker])).toHaveLength(0)
+    })
+
+    it('reports value not matching xs:pattern', () => {
+        const patternWorker = makeWorker(patternXsd)
+        const xml = '<Item code="ab"/>'
+        const errors = validator.validate(xml, [patternWorker])
+        expect(errors.some(e => e.message.includes('pattern') && e.message.includes('"code"'))).toBe(true)
     })
 })

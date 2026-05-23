@@ -93,7 +93,12 @@ export class SchemaQuery implements ISchemaParser {
     getAttributesForElement(elementName: string): DocumentNode[] {
         const ct = this.complexTypeForElement(elementName)
         if (!ct) return []
-        return this.collectAttributes(ct).map(el => this.parseElement(el))
+        return this.collectAttributes(ct).map(el => {
+            const node = this.parseElement(el)
+            const pattern = this.patternFromAttr(el)
+            if (pattern !== undefined) node.pattern = pattern
+            return node
+        })
     }
 
     getEnumValuesForAttribute(elementName: string, attrName: string): string[] {
@@ -295,6 +300,27 @@ export class SchemaQuery implements ISchemaParser {
             .filter(el => el.localName === 'enumeration')
             .map(el => el.getAttribute('value') ?? '')
             .filter(v => v !== '')
+    }
+
+    private patternFromAttr(attrEl: Element): string | undefined {
+        const inline = firstChildByLocalName(attrEl, 'simpleType')
+        if (inline) {
+            const p = this.patternFromSimpleType(inline)
+            if (p !== undefined) return p
+        }
+        const typeName = attrEl.getAttribute('type')
+        if (typeName) {
+            const named = this.index.simpleTypeMap.get(stripNsPrefix(typeName))
+            if (named) return this.patternFromSimpleType(named)
+        }
+        return undefined
+    }
+
+    private patternFromSimpleType(simpleType: Element): string | undefined {
+        const restriction = firstChildByLocalName(simpleType, 'restriction')
+        if (!restriction) return undefined
+        const pattern = firstChildByLocalName(restriction, 'pattern')
+        return pattern?.getAttribute('value') ?? undefined
     }
 
     // ─── Content model detection ──────────────────────────────────────────────

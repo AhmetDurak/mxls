@@ -33,6 +33,7 @@ export interface DocumentNode {
     minOccurs?: string
     maxOccurs?: string
     selfClose?: boolean
+    pattern?: string
     requiredAttribute?: DocumentNode[]
     elements?: DocumentNode[]
 }

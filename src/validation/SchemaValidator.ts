@@ -97,6 +97,9 @@ export class SchemaValidator {
     validate(xml: string, workers: ISchemaWorker[]): ValidationError[] {
         const errors: ValidationError[] = []
 
+        // ── 0. Duplicate attribute names (raw text scan) ──────────────────────
+        errors.push(...this.checkDuplicateAttributes(xml))
+
         // ── 1. XML parse errors ───────────────────────────────────────────────
         let parseErrors: ValidationError[] = []
         const parser = new DOMParser({
@@ -122,7 +125,17 @@ export class SchemaValidator {
             },
         })
 
-        const doc = parser.parseFromString(xml, MIME_TYPE.XML_TEXT)
+        let doc: ReturnType<typeof parser.parseFromString>
+        try {
+            doc = parser.parseFromString(xml, MIME_TYPE.XML_TEXT)
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            if (!parseErrors.some(e => e.message === msg)) {
+                parseErrors.push({ line: 1, col: 1, message: msg, severity: Severity.fatalError })
+            }
+            errors.push(...parseErrors)
+            return this.deduplicate(errors)
+        }
         errors.push(...parseErrors)
 
         // If we have fatal errors or no root, structural validation is impossible
@@ -246,6 +259,22 @@ export class SchemaValidator {
                         severity: Severity.error,
                     })
                 }
+
+                // ── 10. xs:pattern violation ───────────────────────────────────
+                if (attrDef.pattern && enumValues.length === 0) {
+                    try {
+                        if (!new RegExp(`^(?:${attrDef.pattern})$`).test(attrValue)) {
+                            errors.push({
+                                line,
+                                col,
+                                message: `Value "${attrValue}" for attribute "${attrName}" on <${localName}> does not match pattern /${attrDef.pattern}/`,
+                                severity: Severity.error,
+                            })
+                        }
+                    } catch {
+                        // malformed XSD regex — skip silently
+                    }
+                }
             }
 
             // ── 7–9. Child occurrence / content-model checks ──────────────────
@@ -309,6 +338,59 @@ export class SchemaValidator {
         }
 
         return this.deduplicate(errors)
+    }
+
+    private checkDuplicateAttributes(xml: string): ValidationError[] {
+        const errors: ValidationError[] = []
+        let i = 0, line = 1, lineStart = 0
+
+        const advanceNewline = (): void => {
+            if (xml[i] === '\n') { line++; lineStart = i + 1 }
+            i++
+        }
+        const skipQuoted = (): void => {
+            const q = xml[i++]
+            while (i < xml.length && xml[i] !== q) advanceNewline()
+            if (i < xml.length) i++
+        }
+
+        while (i < xml.length) {
+            if (xml[i] !== '<') { advanceNewline(); continue }
+            const next = xml[i + 1]
+            if (next === '/' || next === '!' || next === '?') {
+                while (i < xml.length && xml[i] !== '>') advanceNewline()
+                if (i < xml.length) i++
+                continue
+            }
+            const tagLine = line
+            const tagCol = i - lineStart + 1
+            i++ // skip <
+            while (i < xml.length && !/[\s>\/]/.test(xml[i])) i++ // skip tag name
+
+            const seen = new Set<string>()
+            while (i < xml.length && xml[i] !== '>' && xml[i] !== '/') {
+                while (i < xml.length && /\s/.test(xml[i])) advanceNewline()
+                if (i >= xml.length || xml[i] === '>' || xml[i] === '/') break
+                const nameStart = i
+                while (i < xml.length && !/[\s=\/>]/.test(xml[i])) i++
+                const attrName = xml.slice(nameStart, i)
+                if (attrName) {
+                    if (seen.has(attrName)) {
+                        errors.push({ line: tagLine, col: tagCol, message: `Duplicate attribute "${attrName}"`, severity: Severity.error })
+                    }
+                    seen.add(attrName)
+                }
+                while (i < xml.length && xml[i] === ' ') i++
+                if (i < xml.length && xml[i] === '=') {
+                    i++
+                    while (i < xml.length && xml[i] === ' ') i++
+                    if (i < xml.length && (xml[i] === '"' || xml[i] === "'")) skipQuoted()
+                }
+            }
+            while (i < xml.length && xml[i] !== '>') advanceNewline()
+            if (i < xml.length) i++
+        }
+        return errors
     }
 
     private deduplicate(errors: ValidationError[]): ValidationError[] {

@@ -1,0 +1,26 @@
+{
+  "name": "mxls",
+  "version": "1.0.0",
+  "description": "Monaco XML Language Support — autocomplete, validation, template generation",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src", "style.css", "README.md"],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.10",
+    "ts-debounce": "^5.0.1",
+    "prettier": "^3.8.3",
+    "turndown": "^7.2.4",
+    "@types/turndown": "^5.0.6"
+  },
+  "peerDependencies": {
+    "monaco-editor": ">=0.30.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
+}

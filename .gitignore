@@ -1,0 +1,29 @@
+# editor
+.vscode/
+.vs/
+.idea/
+
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+*.js.map
+
+# test coverage
+coverage/
+
+# vitest cache
+.vitest-cache/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# claude agent context (not part of the library)
+.claude/
+CLAUDE.md

@@ -1,14 +1,13 @@
 import { format } from 'prettier'
-import htmlPlugin from 'prettier/plugins/html'
+import xmlPlugin from '@prettier/plugin-xml'
 
 export class XmlFormatter {
     async format(xml: string): Promise<string> {
         return format(xml, {
-            parser: 'html',
-            plugins: [htmlPlugin],
+            parser: 'xml',
+            plugins: [xmlPlugin],
             printWidth: 120,
             tabWidth: 2,
-            bracketSameLine: true,
         })
     }
 }

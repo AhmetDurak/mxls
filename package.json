@@ -5,18 +5,23 @@
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "style.css", "README.md"],
+  "files": [
+    "dist",
+    "style.css",
+    "README.md"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
+    "@prettier/plugin-xml": "^3.4.2",
+    "@types/turndown": "^5.0.6",
     "@xmldom/xmldom": "^0.9.10",
-    "ts-debounce": "^5.0.1",
     "prettier": "^3.8.3",
-    "turndown": "^7.2.4",
-    "@types/turndown": "^5.0.6"
+    "ts-debounce": "^5.0.1",
+    "turndown": "^7.2.4"
   },
   "peerDependencies": {
     "monaco-editor": ">=0.30.0"

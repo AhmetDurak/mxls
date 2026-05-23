@@ -59,6 +59,22 @@ describe('TextAnalyzer', () => {
         it('nested tags → innermost', () => {
             expect(analyzer.getParentTag('<Root><Child>')).toBe('Child')
         })
+
+        it('self-closing tag with no attrs does not pollute parent', () => {
+            expect(analyzer.getParentTag('<Root><Item/>')).toBe('Root')
+        })
+
+        it('self-closing tag with attributes does not pollute parent', () => {
+            expect(analyzer.getParentTag('<Root><Item name="" value=""/>')).toBe('Root')
+        })
+
+        it('self-closing tag with path-like attribute value does not pollute parent', () => {
+            expect(analyzer.getParentTag('<Root><Item path="/a/b/c"/>')).toBe('Root')
+        })
+
+        it('parent tag is correct after multiple self-closing siblings', () => {
+            expect(analyzer.getParentTag('<Root><A x="1"/><B y="2"/>')).toBe('Root')
+        })
     })
 
     describe('getAncestorChain', () => {

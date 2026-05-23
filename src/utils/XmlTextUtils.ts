@@ -40,7 +40,9 @@ export function getUnclosedTags(text: string): string[] {
         .replace(/<!DOCTYPE[^>]*>/gi, '')
 
     // Groups: [1] '/' for closing | '' for opening  [2] tag name  [3] '/>' for self-close
-    const tagRe = /<(\/?)([a-zA-Z_][\w:.-]*)(?:\s[^>]*)?(\/?)>/g
+    // The attributes section uses (?:[^>\/]|\/(?!>))* so that the '/' in '/>'
+    // is never consumed by the greedy attributes match and always lands in group 3.
+    const tagRe = /<(\/?)([a-zA-Z_][\w:.-]*)(?:\s(?:[^>\/]|\/(?!>))*)?(\/?)>/g
     const stack: string[] = []
     let match: RegExpExecArray | null
 

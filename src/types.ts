@@ -68,6 +68,8 @@ export interface ICompletion {
     preselect?: boolean
     insertText: string
     insertTextRules?: languages.CompletionItemInsertTextRule
+    /** XSD maxOccurs value — used internally to suppress exhausted suggestions. Not sent to Monaco. */
+    maxOccurs?: string
     range?:
         | IRange
         | { insert: IRange; replace: IRange }

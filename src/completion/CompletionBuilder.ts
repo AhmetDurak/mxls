@@ -71,6 +71,7 @@ export class CompletionBuilder {
                 sortText,
                 insertText,
                 insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+                maxOccurs: node.maxOccurs,
             }
         })
     }

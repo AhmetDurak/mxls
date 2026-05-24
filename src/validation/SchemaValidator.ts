@@ -159,6 +159,18 @@ export class SchemaValidator {
                 ? stripNsPrefix(parentEl.localName ?? parentEl.nodeName)
                 : null
 
+            // Build the full ancestor chain (top-down, excluding el itself) so
+            // context-aware getSubElements resolves the correct type for this
+            // element rather than falling back to the union of all types.
+            const ancestorChain: string[] = []
+            let ancestor: Node | null = el.parentNode
+            while (ancestor && ancestor.nodeType === 1) {
+                ancestorChain.unshift(
+                    stripNsPrefix((ancestor as Element).localName ?? (ancestor as Element).nodeName),
+                )
+                ancestor = ancestor.parentNode
+            }
+
             // Find the worker that owns this element
             const ownerWorker = findWorkerForElement(localName, parentLocalName, workers)
 
@@ -291,7 +303,7 @@ export class SchemaValidator {
                 })
             }
 
-            const subDefs = ownerWorker.getSubElements(localName)
+            const subDefs = ownerWorker.getSubElements(localName, ancestorChain)
             if (subDefs.length === 0) continue
 
             // Count child occurrences
@@ -306,8 +318,9 @@ export class SchemaValidator {
                 const count = childCountMap.get(subDef.name) ?? 0
 
                 // ── 7. maxOccurs exceeded ──────────────────────────────────────
-                if (subDef.maxOccurs !== undefined && subDef.maxOccurs !== 'unbounded') {
-                    const max = parseInt(subDef.maxOccurs, 10)
+                // XSD default for maxOccurs is 1 when not specified
+                if (subDef.maxOccurs !== 'unbounded') {
+                    const max = parseInt(subDef.maxOccurs ?? '1', 10)
                     if (!isNaN(max) && count > max) {
                         errors.push({
                             line,

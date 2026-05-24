@@ -11,7 +11,15 @@
   "homepage": "https://github.com/AhmetDurak/mxls#readme",
   "keywords": ["monaco", "xml", "xsd", "autocomplete", "validation", "language-server", "editor"],
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": [
     "dist",
     "style.css",
@@ -20,7 +28,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "tsc -p tsconfig.build.json"
+    "clear": "npx rimraf dist",
+    "build": "npm run clear && tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@prettier/plugin-xml": "^3.4.2",

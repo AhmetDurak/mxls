@@ -137,6 +137,26 @@ const GROUP_XSD = makeXsd(`<?xml version="1.0"?>
   <xs:element name="Container" type="ContainerType"/>
 </xs:schema>`)
 
+/**
+ * Schema where Parameter has ONLY attributes (no content model — no sequence/choice/
+ * simpleContent). Elements like this should be self-closing in generated snippets
+ * so the cursor never lands inside them after insertion.
+ */
+const ATTR_ONLY_XSD = makeXsd(`<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="Parameters">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Parameter" type="ParameterType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="ParameterType">
+    <xs:attribute name="name" use="required" type="xs:string"/>
+    <xs:attribute name="value" use="required" type="xs:string"/>
+  </xs:complexType>
+</xs:schema>`)
+
 /** Schema covering sequence / choice / all / simpleContent content model types. */
 const CONTENT_MODEL_XSD = makeXsd(`<?xml version="1.0"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
@@ -218,6 +238,91 @@ const MULTI_TYPE_XSD = makeXsd(`<?xml version="1.0"?>
     <xs:sequence>
       <xs:element name="LeafB" type="xs:string"/>
     </xs:sequence>
+  </xs:complexType>
+</xs:schema>`)
+
+/**
+ * Three contexts share the same element names (CondBlock / Case) but each
+ * context maps Case to a different concrete type with distinct children.
+ * Mirrors the IfBlock/If multi-type pattern in the user's schema.
+ */
+const THREE_CONTEXT_XSD = makeXsd(`<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root element with three child contexts (inline CTs) -->
+  <xs:element name="Root">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- FlowA: CondBlock maps to CondBlockTypeA, Case → CaseTypeA (only ActionA) -->
+        <xs:element name="FlowA">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="Series" type="SeriesType"/>
+              <xs:element name="CondBlock" type="CondBlockTypeA"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+        <!-- FlowB: CondBlock maps to CondBlockTypeB, Case → CaseTypeB (Signal + Scale + Wait) -->
+        <xs:element name="FlowB">
+          <xs:complexType>
+            <xs:choice>
+              <xs:element name="Series" type="SeriesType"/>
+              <xs:element name="CondBlock" type="CondBlockTypeB"/>
+            </xs:choice>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- SeriesType: its own CondBlock maps to CondBlockTypeC -->
+  <xs:complexType name="SeriesType">
+    <xs:choice>
+      <xs:element name="Signal" type="xs:string"/>
+      <xs:element name="CondBlock" type="CondBlockTypeC"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:complexType name="CondBlockTypeA">
+    <xs:sequence>
+      <xs:element name="Case" type="CaseTypeA"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CondBlockTypeB">
+    <xs:sequence>
+      <xs:element name="Case" type="CaseTypeB"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CondBlockTypeC">
+    <xs:sequence>
+      <xs:element name="Case" type="CaseTypeC"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- CaseTypeA: only ActionA -->
+  <xs:complexType name="CaseTypeA">
+    <xs:sequence>
+      <xs:element name="ActionA" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- CaseTypeB: Signal + Scale + Wait -->
+  <xs:complexType name="CaseTypeB">
+    <xs:choice>
+      <xs:element name="Signal" type="xs:string"/>
+      <xs:element name="Scale"  type="xs:string"/>
+      <xs:element name="Wait"   type="xs:float"/>
+    </xs:choice>
+  </xs:complexType>
+
+  <!-- CaseTypeC: SignalCycle + Scale -->
+  <xs:complexType name="CaseTypeC">
+    <xs:choice>
+      <xs:element name="SignalCycle" type="xs:string"/>
+      <xs:element name="Scale"      type="xs:string"/>
+    </xs:choice>
   </xs:complexType>
 </xs:schema>`)
 
@@ -317,6 +422,40 @@ describe('SchemaParser', () => {
             const names = children.map(c => c.name)
             expect(names).toContain('LeafA')
             expect(names).toContain('LeafB')
+        })
+
+        // Three-context IfBlock-mirror tests
+        it('three-context: Case under FlowA/CondBlock returns only ActionA', () => {
+            const parser = new SchemaParser(THREE_CONTEXT_XSD)
+            const names = parser.getSubElements('Case', ['Root', 'FlowA', 'CondBlock']).map(c => c.name)
+            expect(names).toEqual(['ActionA'])
+        })
+
+        it('three-context: Case under FlowB/CondBlock returns only Signal+Scale+Wait', () => {
+            const parser = new SchemaParser(THREE_CONTEXT_XSD)
+            const names = parser.getSubElements('Case', ['Root', 'FlowB', 'CondBlock']).map(c => c.name)
+            expect(names).toContain('Signal')
+            expect(names).toContain('Scale')
+            expect(names).toContain('Wait')
+            expect(names).not.toContain('ActionA')
+            expect(names).not.toContain('SignalCycle')
+        })
+
+        it('three-context: Case under FlowA/Series/CondBlock returns only SignalCycle+Scale', () => {
+            const parser = new SchemaParser(THREE_CONTEXT_XSD)
+            const names = parser.getSubElements('Case', ['Root', 'FlowA', 'Series', 'CondBlock']).map(c => c.name)
+            expect(names).toContain('SignalCycle')
+            expect(names).toContain('Scale')
+            expect(names).not.toContain('ActionA')
+            expect(names).not.toContain('Signal')
+        })
+
+        it('three-context: no ancestor chain returns union of all Case children', () => {
+            const parser = new SchemaParser(THREE_CONTEXT_XSD)
+            const names = parser.getSubElements('Case').map(c => c.name)
+            expect(names).toContain('ActionA')
+            expect(names).toContain('Signal')
+            expect(names).toContain('SignalCycle')
         })
     })
 
@@ -418,6 +557,30 @@ describe('SchemaParser', () => {
             const groupNode = { ref: 'CommonGroup' }
             const children = parser.getElementsFromGroup(groupNode)
             expect(children.map(c => c.name)).toContain('GroupChild')
+        })
+    })
+
+    // 8b. selfClose flag for attribute-only elements
+    describe('selfClose flag', () => {
+        it('sets selfClose on element whose complexType has only attributes (no content model)', () => {
+            const parser = new SchemaParser(ATTR_ONLY_XSD)
+            const children = parser.getSubElements('Parameters')
+            const param = children.find(c => c.name === 'Parameter')
+            expect(param?.selfClose).toBe(true)
+        })
+
+        it('does not set selfClose on element with xs:sequence', () => {
+            const parser = new SchemaParser(ATTR_ONLY_XSD)
+            const roots = parser.getRootElements()
+            const parameters = roots.find(r => r.name === 'Parameters')
+            expect(parameters?.selfClose).toBeUndefined()
+        })
+
+        it('sets selfClose on element with xs:simpleContent', () => {
+            const parser = new SchemaParser(CONTENT_MODEL_XSD)
+            const roots = parser.getRootElements()
+            const simpleEl = roots.find(r => r.name === 'SimpleEl')
+            expect(simpleEl?.selfClose).toBe(true)
         })
     })
 

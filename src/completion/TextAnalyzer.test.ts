@@ -64,8 +64,12 @@ describe('TextAnalyzer', () => {
             expect(analyzer.getParentTag('<Root><Item/>')).toBe('Root')
         })
 
-        it('self-closing tag with attributes does not pollute parent', () => {
+        it('self-closing tag with empty attributes does not pollute parent', () => {
             expect(analyzer.getParentTag('<Root><Item name="" value=""/>')).toBe('Root')
+        })
+
+        it('self-closing tag with non-empty attribute values does not pollute parent', () => {
+            expect(analyzer.getParentTag('<Root><Item name="Tags" value="sdf"/>')).toBe('Root')
         })
 
         it('self-closing tag with path-like attribute value does not pollute parent', () => {
@@ -88,6 +92,20 @@ describe('TextAnalyzer', () => {
 
         it('three levels → all but innermost', () => {
             expect(analyzer.getAncestorChain('<Root><Parent><Child>')).toEqual(['Root', 'Parent'])
+        })
+
+        it('self-closing sibling with attrs does not corrupt ancestor chain', () => {
+            // <Root><Group><Item name="Tags" value="sdf"/><Child>
+            // Item must NOT appear in the ancestor chain — only Root and Group should.
+            expect(
+                analyzer.getAncestorChain('<Root><Group><Item name="Tags" value="sdf"/><Child>'),
+            ).toEqual(['Root', 'Group'])
+        })
+
+        it('multiple self-closing siblings do not corrupt ancestor chain', () => {
+            expect(
+                analyzer.getAncestorChain('<Root><Group><A x="1"/><B y="2"/><Child>'),
+            ).toEqual(['Root', 'Group'])
         })
     })
 

@@ -1,6 +1,7 @@
 import type { ISchemaRegistry } from '../interfaces/ISchemaRegistry'
 import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
 import { getRootTag } from '../utils/XmlTextUtils'
+import { logger } from '../utils/Logger'
 
 /**
  * Instance-based (no static state) XML namespace resolver.
@@ -22,6 +23,7 @@ export class NamespaceResolver {
 
         const workers = this.compute(text, registry)
         this.cache.set(key, workers)
+        logger.verbose(`namespace resolver: computed ${workers.length} worker(s) paths=[${workers.map(w => w.xsd.path).join(', ')}]`)
         return workers
     }
 

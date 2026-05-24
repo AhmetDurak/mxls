@@ -3,6 +3,7 @@ import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
 import type { ISchemaRegistry } from '../interfaces/ISchemaRegistry'
 import type { IMonacoApi } from '../interfaces/IMonacoApi'
 import { SchemaWorker } from './SchemaWorker'
+import { logger } from '../utils/Logger'
 
 /** Schema registry — no editor reference. */
 export class SchemaRegistry implements ISchemaRegistry {
@@ -13,15 +14,19 @@ export class SchemaRegistry implements ISchemaRegistry {
 
     set(xsd: IXsd): void {
         this.workers.set(xsd.path, SchemaWorker.create(xsd, this.monacoApi))
+        logger.info(`schema registered: ${xsd.path}`)
     }
 
     update(xsd: IXsd): void {
         this.workers.delete(xsd.path)
         this.set(xsd)
+        logger.info(`schema updated: ${xsd.path}`)
     }
 
     delete(path: string): boolean {
-        return this.workers.delete(path)
+        const removed = this.workers.delete(path)
+        logger.info(`schema ${removed ? 'removed' : 'not found (delete):'} ${path}`)
+        return removed
     }
 
     get(path: string): ISchemaWorker | undefined {

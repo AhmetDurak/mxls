@@ -2,6 +2,7 @@ import { DOMParser, MIME_TYPE } from '@xmldom/xmldom'
 import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
 import { ContentModelType, Severity, type ValidationError } from '../types'
 import { stripNsPrefix } from '../utils/XmlTextUtils'
+import { logger } from '../utils/Logger'
 
 // ─── xmldom extension types ───────────────────────────────────────────────────
 
@@ -130,11 +131,16 @@ export class SchemaValidator {
             doc = parser.parseFromString(xml, MIME_TYPE.XML_TEXT)
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
+            logger.error(`XML parse threw: ${msg}`)
             if (!parseErrors.some(e => e.message === msg)) {
                 parseErrors.push({ line: 1, col: 1, message: msg, severity: Severity.fatalError })
             }
             errors.push(...parseErrors)
             return this.deduplicate(errors)
+        }
+        if (parseErrors.length > 0) {
+            logger.warn(`XML parse produced ${parseErrors.length} error(s)`)
+            parseErrors.forEach(e => logger.verbose(`  parse [${e.severity}] ${e.line}:${e.col} ${e.message}`))
         }
         errors.push(...parseErrors)
 
@@ -350,7 +356,10 @@ export class SchemaValidator {
             }
         }
 
-        return this.deduplicate(errors)
+        const result = this.deduplicate(errors)
+        logger.debug(`validation: ${result.length} error(s) in ${allElements.length} element(s)`)
+        result.forEach(e => logger.verbose(`  [${e.severity}] ${e.line}:${e.col} ${e.message}`))
+        return result
     }
 
     private checkDuplicateAttributes(xml: string): ValidationError[] {

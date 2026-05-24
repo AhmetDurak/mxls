@@ -19,3 +19,7 @@ export type { IMonacoApi } from './interfaces/IMonacoApi'
 export type { ISchemaRegistry } from './interfaces/ISchemaRegistry'
 export type { ISchemaWorker } from './interfaces/ISchemaWorker'
 export type { ISchemaParser } from './interfaces/ISchemaParser'
+
+// Logging
+export { setLogLevel } from './utils/Logger'
+export type { LogLevel } from './utils/Logger'

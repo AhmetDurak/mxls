@@ -7,6 +7,7 @@ import { TextAnalyzer } from './TextAnalyzer'
 import { CompletionBuilder } from './CompletionBuilder'
 import { CompletionCache } from './CompletionCache'
 import { NamespaceResolver } from './NamespaceResolver'
+import { logger } from '../utils/Logger'
 
 /**
  * Thin Monaco CompletionItemProvider shell.
@@ -60,10 +61,15 @@ export class SchemaCompleter {
                 if (type === CompletionType.none) return { suggestions: [] }
 
                 const workers = this.resolver.resolve(fullText, this.xsdManager)
-                if (workers.length === 0) return { suggestions: [] }
+                if (workers.length === 0) {
+                    logger.debug('completion: no workers resolved, skipping')
+                    return { suggestions: [] }
+                }
 
                 const parentTag = this.analyzer.getParentTag(text) ?? ''
                 const ancestorChain = this.analyzer.getAncestorChain(text)
+
+                logger.debug(`completion: type=${CompletionType[type]} parent=<${parentTag}> workers=${workers.length}`)
 
                 // Only cache element completions. Attribute completions are excluded
                 // because they use `openTag` (the currently-open tag) as the lookup key,
@@ -76,19 +82,23 @@ export class SchemaCompleter {
                 ) {
                     const key = this.cache.makeKey(parentTag, ancestorChain)
                     const hit = this.cache.get(key)
-                    if (hit) return { suggestions: withRange(hit) }
+                    if (hit) {
+                        logger.verbose(`completion: cache hit key="${key}" items=${hit.length}`)
+                        return { suggestions: withRange(hit) }
+                    }
 
                     const items = this.gather(type, parentTag, ancestorChain, workers, text)
+                    logger.debug(`completion: ${items.length} element suggestion(s) for <${parentTag}>`)
                     // Only cache non-empty results — a transient empty (schema not yet
                     // ready, cursor in mid-snippet position) must not poison the key.
                     if (items.length > 0) this.cache.set(key, items)
                     return { suggestions: withRange(items) }
                 }
 
+                const items = this.gather(type, parentTag, ancestorChain, workers, text)
+                logger.debug(`completion: ${items.length} suggestion(s) type=${CompletionType[type]}`)
                 return {
-                    suggestions: withRange(
-                        this.gather(type, parentTag, ancestorChain, workers, text),
-                    ),
+                    suggestions: withRange(items),
                 }
             },
         }

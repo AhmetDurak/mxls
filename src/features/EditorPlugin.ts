@@ -7,6 +7,7 @@ import { TemplateBuilder } from '../template/TemplateBuilder'
 import { XmlFormatter } from '../formatter/XmlFormatter'
 import { SchemaHover } from '../hover/SchemaHover'
 import { getRootTag } from '../utils/XmlTextUtils'
+import { logger } from '../utils/Logger'
 
 export interface EditorPluginOptions {
     /**
@@ -52,6 +53,7 @@ export class EditorPlugin {
             'xml',
             this.hover.provider(),
         )
+        logger.info('EditorPlugin activated')
         this.revalidate()
     }
 
@@ -90,11 +92,16 @@ export class EditorPlugin {
         let formatted: string
         try {
             formatted = await this.formatter.format(original)
-        } catch {
+        } catch (err) {
+            logger.warn(`reformatXml failed: ${err instanceof Error ? err.message : String(err)}`)
             return
         }
 
-        if (formatted === original) return
+        if (formatted === original) {
+            logger.debug('reformatXml: no changes')
+            return
+        }
+        logger.debug('reformatXml: applied')
 
         const fullRange = model.getFullModelRange()
         model.pushEditOperations([], [{ range: fullRange, text: formatted }], () => null)
@@ -126,6 +133,7 @@ export class EditorPlugin {
 
     /** Unregister all providers and clear all validation decorations. */
     dispose(): void {
+        logger.info('EditorPlugin disposed')
         this.decorator.dispose()
         this.completionDisposable?.dispose()
         this.completionDisposable = null

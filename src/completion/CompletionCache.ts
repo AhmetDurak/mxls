@@ -1,7 +1,9 @@
 import type { ICompletion } from '../types'
 
 /**
- * Instance-based memoization of completion results.
+ * Instance-based memoization of element completion results.
+ * Only element/incompleteElement types are cached — attribute completions
+ * are intentionally excluded (see SchemaCompleter for rationale).
  * Key: `[...ancestorChain, parentElement].join('>')` when chain is non-empty,
  * else just `parentElement`.
  */

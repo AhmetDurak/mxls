@@ -21,7 +21,7 @@ export class SchemaCompleter {
 
     constructor(
         private readonly xsdManager: ISchemaRegistry,
-        monacoApi: IMonacoApi,
+        private readonly monacoApi: IMonacoApi,
     ) {
         this.builder = new CompletionBuilder(monacoApi)
     }
@@ -39,6 +39,19 @@ export class SchemaCompleter {
                     endColumn: position.column,
                 })
 
+                // Monaco requires every CompletionItem to carry a range;
+                // items without one are silently dropped. Compute the word range
+                // at the cursor once and stamp it onto every suggestion we return.
+                const word = model.getWordUntilPosition(position)
+                const range = new this.monacoApi.Range(
+                    position.lineNumber,
+                    word.startColumn,
+                    position.lineNumber,
+                    word.endColumn,
+                )
+                const withRange = (items: ICompletion[]): languages.CompletionItem[] =>
+                    items.map(item => ({ ...item, range }) as unknown as languages.CompletionItem)
+
                 const type = this.analyzer.getCompletionType(
                     text,
                     context.triggerKind,
@@ -52,28 +65,30 @@ export class SchemaCompleter {
                 const parentTag = this.analyzer.getParentTag(text) ?? ''
                 const ancestorChain = this.analyzer.getAncestorChain(text)
 
-                // Cache element/attribute completions; skip for attribute values
+                // Only cache element completions. Attribute completions are excluded
+                // because they use `openTag` (the currently-open tag) as the lookup key,
+                // but the cache key is built from `parentTag` (the innermost *closed*
+                // element). The two diverge while typing `<Elem `, so caching attributes
+                // under parentTag pollutes subsequent element-completion lookups.
                 if (
-                    type !== CompletionType.attributeValue &&
-                    type !== CompletionType.closingElement
+                    type === CompletionType.element ||
+                    type === CompletionType.incompleteElement
                 ) {
                     const key = this.cache.makeKey(parentTag, ancestorChain)
                     const hit = this.cache.get(key)
-                    if (hit) return { suggestions: hit as unknown as languages.CompletionItem[] }
+                    if (hit) return { suggestions: withRange(hit) }
 
                     const items = this.gather(type, parentTag, ancestorChain, workers, text)
-                    this.cache.set(key, items)
-                    return { suggestions: items as unknown as languages.CompletionItem[] }
+                    // Only cache non-empty results — a transient empty (schema not yet
+                    // ready, cursor in mid-snippet position) must not poison the key.
+                    if (items.length > 0) this.cache.set(key, items)
+                    return { suggestions: withRange(items) }
                 }
 
                 return {
-                    suggestions: this.gather(
-                        type,
-                        parentTag,
-                        ancestorChain,
-                        workers,
-                        text,
-                    ) as unknown as languages.CompletionItem[],
+                    suggestions: withRange(
+                        this.gather(type, parentTag, ancestorChain, workers, text),
+                    ),
                 }
             },
         }
@@ -105,7 +120,15 @@ export class SchemaCompleter {
                 for (const worker of workers) {
                     results.push(...worker.doCompletion(type, parentTag, ancestorChain))
                 }
-                return results
+                // Filter out elements that have reached their maxOccurs limit
+                return results.filter(item => {
+                    if (!item.maxOccurs || item.maxOccurs === 'unbounded') return true
+                    const max = parseInt(item.maxOccurs, 10)
+                    if (isNaN(max)) return true
+                    const label = typeof item.label === 'string' ? item.label : item.label.label
+                    const count = this.analyzer.countChildOccurrences(text, parentTag, label)
+                    return count < max
+                })
             }
 
             case CompletionType.attribute:
@@ -126,6 +149,28 @@ export class SchemaCompleter {
                 for (const worker of workers) {
                     const values = worker.getEnumValuesForAttribute(tagName, attrName)
                     results.push(...this.builder.buildAttributeValues(values))
+                }
+                // Cross-schema type resolution: if the attribute's type is defined in
+                // another worker (e.g. a shared simpleType XSD), look it up there.
+                if (results.length === 0) {
+                    for (const worker of workers) {
+                        const attrDef = worker.getAttributesForElement(tagName)
+                            .find(a => a.name === attrName)
+                        if (!attrDef?.type) continue
+                        const typeName = attrDef.type.replace(/^[^:]+:/, '')
+                        for (const w of workers) {
+                            const values = w.getEnumValuesForNamedType(typeName)
+                            if (values.length > 0) {
+                                results.push(...this.builder.buildAttributeValues(values))
+                                break
+                            }
+                        }
+                        if (results.length > 0) break
+                    }
+                }
+                const dynamicValues = this.xsdManager.getDynamicEnumValues(tagName, attrName)
+                if (dynamicValues.length > 0) {
+                    results.push(...this.builder.buildAttributeValues(dynamicValues))
                 }
                 return results
             }

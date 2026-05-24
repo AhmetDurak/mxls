@@ -398,7 +398,17 @@ export class SchemaQuery implements ISchemaParser {
                 .map(el => this.parseElement(el))
 
             if (required.length > 0) node.requiredAttribute = required
-            if (firstChildByLocalName(ct, 'simpleContent') !== null) node.selfClose = true
+
+            // Mark as self-closing when the element has no child-element content:
+            // covers xs:simpleContent (text value + attrs) and bare attribute-only
+            // complexTypes (no sequence/choice/all/complexContent present).
+            const hasElementChildren =
+                firstChildByLocalName(ct, 'sequence') !== null ||
+                firstChildByLocalName(ct, 'choice') !== null ||
+                firstChildByLocalName(ct, 'all') !== null ||
+                firstChildByLocalName(ct, 'complexContent') !== null
+            if (!hasElementChildren) node.selfClose = true
+
             return node
         })
     }

@@ -7,6 +7,7 @@ import { SchemaWorker } from './SchemaWorker'
 /** Schema registry — no editor reference. */
 export class SchemaRegistry implements ISchemaRegistry {
     private readonly workers = new Map<string, ISchemaWorker>()
+    private readonly dynamicEnums = new Map<string, Map<string, string[]>>()
 
     constructor(private readonly monacoApi: IMonacoApi) {}
 
@@ -73,5 +74,18 @@ export class SchemaRegistry implements ISchemaRegistry {
             }
         }
         return undefined
+    }
+
+    setDynamicEnumValues(elementName: string, attrName: string, values: string[]): void {
+        let attrMap = this.dynamicEnums.get(elementName)
+        if (!attrMap) {
+            attrMap = new Map()
+            this.dynamicEnums.set(elementName, attrMap)
+        }
+        attrMap.set(attrName, values)
+    }
+
+    getDynamicEnumValues(elementName: string, attrName: string): string[] {
+        return this.dynamicEnums.get(elementName)?.get(attrName) ?? []
     }
 }

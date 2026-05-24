@@ -45,4 +45,15 @@ export interface ISchemaRegistry {
         elementName: string,
         parentName: string | null,
     ): ISchemaWorker | undefined
+
+    /**
+     * Inject runtime enum values for a specific element+attribute pair.
+     * These supplement (and take priority over) any XSD-defined enumerations.
+     * Call this to expose dynamic data (e.g. live signal lists) as attribute
+     * value completions without regenerating the XSD.
+     */
+    setDynamicEnumValues(elementName: string, attrName: string, values: string[]): void
+
+    /** Retrieve previously injected dynamic enum values, or [] if none. */
+    getDynamicEnumValues(elementName: string, attrName: string): string[]
 }

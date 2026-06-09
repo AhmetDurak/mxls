@@ -157,14 +157,14 @@ export class SchemaCompleter {
                 const tagName = openTag ?? parentTag
                 const results: ICompletion[] = []
                 for (const worker of workers) {
-                    const values = worker.getEnumValuesForAttribute(tagName, attrName)
+                    const values = worker.getEnumValuesForAttribute(tagName, attrName, ancestorChain)
                     results.push(...this.builder.buildAttributeValues(values))
                 }
                 // Cross-schema type resolution: if the attribute's type is defined in
                 // another worker (e.g. a shared simpleType XSD), look it up there.
                 if (results.length === 0) {
                     for (const worker of workers) {
-                        const attrDef = worker.getAttributesForElement(tagName)
+                        const attrDef = worker.getAttributesForElement(tagName, ancestorChain)
                             .find(a => a.name === attrName)
                         if (!attrDef?.type) continue
                         const typeName = attrDef.type.replace(/^[^:]+:/, '')

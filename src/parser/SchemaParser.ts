@@ -28,12 +28,12 @@ export class SchemaParser implements ISchemaParser {
         return this.query.getFirstSubElements(elementName, withAttributes)
     }
 
-    getAttributesForElement(elementName: string): DocumentNode[] {
-        return this.query.getAttributesForElement(elementName)
+    getAttributesForElement(elementName: string, ancestorChain?: string[]): DocumentNode[] {
+        return this.query.getAttributesForElement(elementName, ancestorChain)
     }
 
-    getEnumValuesForAttribute(elementName: string, attrName: string): string[] {
-        return this.query.getEnumValuesForAttribute(elementName, attrName)
+    getEnumValuesForAttribute(elementName: string, attrName: string, ancestorChain?: string[]): string[] {
+        return this.query.getEnumValuesForAttribute(elementName, attrName, ancestorChain)
     }
 
     getEnumValuesForNamedType(typeName: string): string[] {

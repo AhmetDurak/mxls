@@ -25,8 +25,8 @@ export interface ISchemaWorker {
     getRootElements(): DocumentNode[]
     getSubElements(parentTag: string, ancestorChain?: string[]): DocumentNode[]
     getFirstSubElements(parentTag: string, withAttributes: boolean): DocumentNode[]
-    getAttributesForElement(elementName: string): DocumentNode[]
-    getEnumValuesForAttribute(elementName: string, attrName: string): string[]
+    getAttributesForElement(elementName: string, ancestorChain?: string[]): DocumentNode[]
+    getEnumValuesForAttribute(elementName: string, attrName: string, ancestorChain?: string[]): string[]
     getEnumValuesForNamedType(typeName: string): string[]
     getContentModelType(elementName: string): ContentModelType | null
 }

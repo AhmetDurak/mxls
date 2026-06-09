@@ -48,7 +48,7 @@ export class SchemaWorker implements ISchemaWorker {
             }
             case CompletionType.attribute:
             case CompletionType.incompleteAttribute: {
-                const nodes = this.parser.getAttributesForElement(parentTag)
+                const nodes = this.parser.getAttributesForElement(parentTag, ancestorChain)
                 return this.builder.buildAttributes(nodes, type === CompletionType.incompleteAttribute)
             }
             default:
@@ -68,12 +68,12 @@ export class SchemaWorker implements ISchemaWorker {
         return this.parser.getFirstSubElements(parentTag, withAttributes)
     }
 
-    getAttributesForElement(elementName: string): DocumentNode[] {
-        return this.parser.getAttributesForElement(elementName)
+    getAttributesForElement(elementName: string, ancestorChain?: string[]): DocumentNode[] {
+        return this.parser.getAttributesForElement(elementName, ancestorChain)
     }
 
-    getEnumValuesForAttribute(elementName: string, attrName: string): string[] {
-        return this.parser.getEnumValuesForAttribute(elementName, attrName)
+    getEnumValuesForAttribute(elementName: string, attrName: string, ancestorChain?: string[]): string[] {
+        return this.parser.getEnumValuesForAttribute(elementName, attrName, ancestorChain)
     }
 
     getEnumValuesForNamedType(typeName: string): string[] {

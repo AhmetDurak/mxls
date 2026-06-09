@@ -90,8 +90,13 @@ export class SchemaQuery implements ISchemaParser {
         return withAttributes ? this.withRequiredAttributes(nodes) : nodes
     }
 
-    getAttributesForElement(elementName: string): DocumentNode[] {
-        const ct = this.complexTypeForElement(elementName)
+    getAttributesForElement(elementName: string, ancestorChain?: string[]): DocumentNode[] {
+        let ct: Element | undefined
+        if (ancestorChain && ancestorChain.length > 0) {
+            const specificType = this.resolveTypeInContext(elementName, ancestorChain)
+            if (specificType) ct = this.index.complexTypeMap.get(specificType)
+        }
+        if (!ct) ct = this.complexTypeForElement(elementName)
         if (!ct) return []
         return this.collectAttributes(ct).map(el => {
             const node = this.parseElement(el)
@@ -101,8 +106,13 @@ export class SchemaQuery implements ISchemaParser {
         })
     }
 
-    getEnumValuesForAttribute(elementName: string, attrName: string): string[] {
-        const ct = this.complexTypeForElement(elementName)
+    getEnumValuesForAttribute(elementName: string, attrName: string, ancestorChain?: string[]): string[] {
+        let ct: Element | undefined
+        if (ancestorChain && ancestorChain.length > 0) {
+            const specificType = this.resolveTypeInContext(elementName, ancestorChain)
+            if (specificType) ct = this.index.complexTypeMap.get(specificType)
+        }
+        if (!ct) ct = this.complexTypeForElement(elementName)
         if (!ct) return []
 
         const attrEl = this.collectAttributes(ct).find(

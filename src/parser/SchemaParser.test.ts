@@ -326,6 +326,67 @@ const THREE_CONTEXT_XSD = makeXsd(`<?xml version="1.0"?>
   </xs:complexType>
 </xs:schema>`)
 
+/**
+ * Schema where Parameter appears under two parents with completely different
+ * attribute sets:
+ *   <Parameters><Parameter name value />          — ParameterType (name, value)
+ *   <Methods><Method><Parameters><Parameter type name value /> — MethodParameterType (type, name, value)
+ */
+const AMBIGUOUS_ATTR_XSD = makeXsd(`<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="Root">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Parameters" type="ParametersType"/>
+        <xs:element name="Methods"    type="MethodsType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="ParametersType">
+    <xs:sequence>
+      <xs:element name="Parameter" type="ParameterType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ParameterType">
+    <xs:attribute name="name"  use="required" type="xs:string"/>
+    <xs:attribute name="value" use="required" type="xs:string"/>
+  </xs:complexType>
+
+  <xs:complexType name="MethodsType">
+    <xs:sequence>
+      <xs:element name="Method" type="MethodType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="MethodType">
+    <xs:sequence>
+      <xs:element name="Parameters" type="MethodParametersType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="MethodParametersType">
+    <xs:sequence>
+      <xs:element name="Parameter" type="MethodParameterType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="MethodParameterType">
+    <xs:attribute name="type"  use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="boolean"/>
+          <xs:enumeration value="integer"/>
+          <xs:enumeration value="string"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="name"  use="required" type="xs:string"/>
+    <xs:attribute name="value" use="required" type="xs:string"/>
+  </xs:complexType>
+</xs:schema>`)
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('SchemaParser', () => {
@@ -636,6 +697,49 @@ describe('SchemaParser', () => {
             const roots = parser.getRootElements()
             const item = roots.find(r => r.name === 'Item')
             expect(item?.requiredAttribute?.map(a => a.name)).toContain('id')
+        })
+    })
+
+    // 11. Context-aware attribute resolution
+    describe('getAttributesForElement with ancestor chain', () => {
+        it('Parameter under Root/Parameters resolves to ParameterType (name, value only)', () => {
+            const parser = new SchemaParser(AMBIGUOUS_ATTR_XSD)
+            const attrs = parser.getAttributesForElement('Parameter', ['Root', 'Parameters'])
+            const names = attrs.map(a => a.name)
+            expect(names).toContain('name')
+            expect(names).toContain('value')
+            expect(names).not.toContain('type')
+        })
+
+        it('Parameter under Root/Methods/Method/Parameters resolves to MethodParameterType (type, name, value)', () => {
+            const parser = new SchemaParser(AMBIGUOUS_ATTR_XSD)
+            const attrs = parser.getAttributesForElement('Parameter', ['Root', 'Methods', 'Method', 'Parameters'])
+            const names = attrs.map(a => a.name)
+            expect(names).toContain('type')
+            expect(names).toContain('name')
+            expect(names).toContain('value')
+        })
+
+        it('without ancestor chain returns union of all Parameter attributes', () => {
+            const parser = new SchemaParser(AMBIGUOUS_ATTR_XSD)
+            const attrs = parser.getAttributesForElement('Parameter')
+            const names = attrs.map(a => a.name)
+            expect(names).toContain('name')
+            expect(names).toContain('value')
+        })
+
+        it('getEnumValuesForAttribute returns enum only for MethodParameter.type in correct context', () => {
+            const parser = new SchemaParser(AMBIGUOUS_ATTR_XSD)
+            const withContext = parser.getEnumValuesForAttribute('Parameter', 'type', ['Root', 'Methods', 'Method', 'Parameters'])
+            expect(withContext).toContain('boolean')
+            expect(withContext).toContain('integer')
+            expect(withContext).toContain('string')
+        })
+
+        it('getEnumValuesForAttribute returns empty for Parameter.type in wrong context', () => {
+            const parser = new SchemaParser(AMBIGUOUS_ATTR_XSD)
+            const withContext = parser.getEnumValuesForAttribute('Parameter', 'type', ['Root', 'Parameters'])
+            expect(withContext).toHaveLength(0)
         })
     })
 })

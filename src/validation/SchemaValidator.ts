@@ -213,7 +213,7 @@ export class SchemaValidator {
 
             if (!ownerWorker) continue
 
-            const definedAttrs = ownerWorker.getAttributesForElement(localName)
+            const definedAttrs = ownerWorker.getAttributesForElement(localName, ancestorChain)
 
             // ── 3. Missing required attributes ────────────────────────────────
             for (const attrDef of definedAttrs) {
@@ -268,7 +268,7 @@ export class SchemaValidator {
                 }
 
                 // ── 6. Invalid enum value ──────────────────────────────────────
-                const enumValues = ownerWorker.getEnumValuesForAttribute(localName, attrName)
+                const enumValues = ownerWorker.getEnumValuesForAttribute(localName, attrName, ancestorChain)
                 if (enumValues.length > 0 && !enumValues.includes(attrValue)) {
                     errors.push({
                         line,

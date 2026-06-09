@@ -22,11 +22,18 @@ export interface ISchemaParser {
      */
     getFirstSubElements(elementName: string, withAttributes: boolean): DocumentNode[]
 
-    /** xs:attribute declarations for `elementName`. */
-    getAttributesForElement(elementName: string): DocumentNode[]
+    /**
+     * xs:attribute declarations for `elementName`.
+     * When `ancestorChain` is provided the result is context-aware: the correct
+     * complex type is resolved via the ancestor path before collecting attributes.
+     */
+    getAttributesForElement(elementName: string, ancestorChain?: string[]): DocumentNode[]
 
-    /** Allowed enum values for a specific attribute on `elementName`. */
-    getEnumValuesForAttribute(elementName: string, attrName: string): string[]
+    /**
+     * Allowed enum values for a specific attribute on `elementName`.
+     * When `ancestorChain` is provided the attribute type is resolved in context.
+     */
+    getEnumValuesForAttribute(elementName: string, attrName: string, ancestorChain?: string[]): string[]
 
     /** Allowed enum values looked up by the named simpleType directly. */
     getEnumValuesForNamedType(typeName: string): string[]

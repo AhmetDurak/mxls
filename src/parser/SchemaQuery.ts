@@ -1,5 +1,6 @@
 import type { ContentModelType, DocumentNode } from '../types'
 import type { ISchemaParser } from '../interfaces/ISchemaParser'
+import { logger } from '../utils/Logger'
 import {
     SchemaIndex,
     XSD_NS,
@@ -92,10 +93,12 @@ export class SchemaQuery implements ISchemaParser {
 
     getAttributesForElement(elementName: string, ancestorChain?: string[]): DocumentNode[] {
         let ct: Element | undefined
+        let resolvedType: string | undefined
         if (ancestorChain && ancestorChain.length > 0) {
-            const specificType = this.resolveTypeInContext(elementName, ancestorChain)
-            if (specificType) ct = this.index.complexTypeMap.get(specificType)
+            resolvedType = this.resolveTypeInContext(elementName, ancestorChain)
+            if (resolvedType) ct = this.index.complexTypeMap.get(resolvedType)
         }
+        logger.verbose(`getAttributesForElement("${elementName}", [${ancestorChain?.join(', ')}]) → resolved="${resolvedType ?? 'none'}" ct=${ct ? 'found' : 'fallback'}`)
         if (!ct) ct = this.complexTypeForElement(elementName)
         if (!ct) return []
         return this.collectAttributes(ct).map(el => {
@@ -400,7 +403,12 @@ export class SchemaQuery implements ISchemaParser {
         return nodes.map(node => {
             const name = node.name ?? node.ref
             if (!name) return node
-            const ct = this.complexTypeForElement(name)
+            // Prefer node.type (the XSD @type attr written on the element declaration)
+            // over elementTypeMap which is last-write-wins and ambiguous when multiple
+            // element declarations share the same local name with different types.
+            const explicitType = node.type ? stripNsPrefix(node.type) : undefined
+            const ct = (explicitType ? this.index.complexTypeMap.get(explicitType) : undefined)
+                ?? this.complexTypeForElement(name)
             if (!ct) return node
 
             const required = this.collectAttributes(ct)

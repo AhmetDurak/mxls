@@ -144,9 +144,12 @@ export class SchemaCompleter {
             case CompletionType.attribute:
             case CompletionType.incompleteAttribute: {
                 const tagName = openTag ?? parentTag
+                // openTag's direct parent is parentTag — include it so resolution
+                // walks the full path [...ancestors, parentTag, openTag]
+                const attrAncestors = openTag ? [...ancestorChain, parentTag] : ancestorChain
                 const results: ICompletion[] = []
                 for (const worker of workers) {
-                    results.push(...worker.doCompletion(CompletionType.attribute, tagName, ancestorChain))
+                    results.push(...worker.doCompletion(CompletionType.attribute, tagName, attrAncestors))
                 }
                 return results
             }
@@ -155,16 +158,17 @@ export class SchemaCompleter {
                 const attrName = this.analyzer.getAttrNameBeforeCursor(text)
                 if (!attrName) return []
                 const tagName = openTag ?? parentTag
+                const attrAncestors = openTag ? [...ancestorChain, parentTag] : ancestorChain
                 const results: ICompletion[] = []
                 for (const worker of workers) {
-                    const values = worker.getEnumValuesForAttribute(tagName, attrName, ancestorChain)
+                    const values = worker.getEnumValuesForAttribute(tagName, attrName, attrAncestors)
                     results.push(...this.builder.buildAttributeValues(values))
                 }
                 // Cross-schema type resolution: if the attribute's type is defined in
                 // another worker (e.g. a shared simpleType XSD), look it up there.
                 if (results.length === 0) {
                     for (const worker of workers) {
-                        const attrDef = worker.getAttributesForElement(tagName, ancestorChain)
+                        const attrDef = worker.getAttributesForElement(tagName, attrAncestors)
                             .find(a => a.name === attrName)
                         if (!attrDef?.type) continue
                         const typeName = attrDef.type.replace(/^[^:]+:/, '')

@@ -338,9 +338,14 @@ export class SchemaValidator {
                 }
 
                 // ── 8. minOccurs violated (sequence / all only) ────────────────
+                // Skip elements that are alternatives inside an xs:choice — only one
+                // of the alternatives needs to be present, not each one individually.
                 if (
-                    contentModel === ContentModelType.sequence ||
-                    contentModel === ContentModelType.all
+                    !subDef.inChoice &&
+                    (
+                        contentModel === ContentModelType.sequence ||
+                        contentModel === ContentModelType.all
+                    )
                 ) {
                     const minStr = subDef.minOccurs ?? '1'
                     const min = parseInt(minStr, 10)

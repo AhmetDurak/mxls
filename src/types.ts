@@ -34,6 +34,8 @@ export interface DocumentNode {
     maxOccurs?: string
     selfClose?: boolean
     pattern?: string
+    /** True when this node is declared inside an xs:choice — its individual minOccurs is not independently enforced. */
+    inChoice?: boolean
     requiredAttribute?: DocumentNode[]
     elements?: DocumentNode[]
 }

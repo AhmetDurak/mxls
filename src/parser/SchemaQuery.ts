@@ -34,8 +34,13 @@ export class SchemaQuery implements ISchemaParser {
                 const ct = this.index.complexTypeMap.get(specificType)
                 if (ct) {
                     const collected: Element[] = []
-                    this.collectElements(ct, collected, new Set(), false)
-                    const nodes = collected.map(el => this.parseElement(el))
+                    const choiceSet = new Set<Element>()
+                    this.collectElements(ct, collected, new Set(), false, choiceSet)
+                    const nodes = collected.map(el => {
+                        const node = this.parseElement(el)
+                        if (choiceSet.has(el)) node.inChoice = true
+                        return node
+                    })
                     const hasAny = ct.getElementsByTagNameNS(XSD_NS, 'any').length > 0
                     const base = hasAny ? nodes.concat(this.getRootElements()) : nodes
                     return this.withRequiredAttributes(base)
@@ -49,6 +54,7 @@ export class SchemaQuery implements ISchemaParser {
 
         const seenNames = new Set<string>()
         const collected: Element[] = []
+        const choiceSet = new Set<Element>()
         let hasAny = false
 
         for (const typeName of typeNames) {
@@ -56,7 +62,7 @@ export class SchemaQuery implements ISchemaParser {
             if (!ct) continue
             if (ct.getElementsByTagNameNS(XSD_NS, 'any').length > 0) hasAny = true
             const perType: Element[] = []
-            this.collectElements(ct, perType, new Set(), false)
+            this.collectElements(ct, perType, new Set(), false, choiceSet)
             for (const el of perType) {
                 const localName = stripNsPrefix(
                     el.getAttribute('name') ?? el.getAttribute('ref') ?? '',
@@ -68,7 +74,11 @@ export class SchemaQuery implements ISchemaParser {
             }
         }
 
-        const nodes = collected.map(el => this.parseElement(el))
+        const nodes = collected.map(el => {
+            const node = this.parseElement(el)
+            if (choiceSet.has(el)) node.inChoice = true
+            return node
+        })
         const base = hasAny ? nodes.concat(this.getRootElements()) : nodes
         return this.withRequiredAttributes(base)
     }
@@ -215,25 +225,29 @@ export class SchemaQuery implements ISchemaParser {
         result: Element[],
         visited: Set<string>,
         firstOnly: boolean,
+        choiceSet?: Set<Element>,
+        inChoice: boolean = false,
     ): void {
         for (const child of directChildElements(node)) {
             switch (child.localName) {
                 case 'element':
                     result.push(child)
+                    if (inChoice && choiceSet) choiceSet.add(child)
                     break
                 case 'choice':
                     if (firstOnly) {
                         this.collectFirstBranchOfChoice(child, result, visited)
                     } else {
-                        this.collectElements(child, result, visited, false)
+                        // Elements inside a choice are alternatives — mark them inChoice
+                        this.collectElements(child, result, visited, false, choiceSet, true)
                     }
                     break
                 case 'group':
-                    this.followGroupRef(child, result, visited, firstOnly)
+                    this.followGroupRef(child, result, visited, firstOnly, choiceSet, inChoice)
                     break
                 default:
                     if (CONTAINER_LOCAL_NAMES.has(child.localName ?? '')) {
-                        this.collectElements(child, result, visited, firstOnly)
+                        this.collectElements(child, result, visited, firstOnly, choiceSet, inChoice)
                     }
                     break
             }
@@ -259,6 +273,8 @@ export class SchemaQuery implements ISchemaParser {
         result: Element[],
         visited: Set<string>,
         firstOnly: boolean,
+        choiceSet?: Set<Element>,
+        inChoice: boolean = false,
     ): void {
         const ref = groupNode.getAttribute('ref')
         if (!ref) return
@@ -266,7 +282,7 @@ export class SchemaQuery implements ISchemaParser {
         if (visited.has(name)) return
         visited.add(name)
         const group = this.index.groupMap.get(name)
-        if (group) this.collectElements(group, result, visited, firstOnly)
+        if (group) this.collectElements(group, result, visited, firstOnly, choiceSet, inChoice)
     }
 
     // ─── Attribute traversal ──────────────────────────────────────────────────

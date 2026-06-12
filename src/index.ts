@@ -15,7 +15,7 @@ export type {
     ContentModelType,
 } from './types'
 export { CompletionType, Severity } from './types'
-export type { IMonacoApi } from './interfaces/IMonacoApi'
+export type { IMonacoApi, ICodeEditor, ICodeEditorModel, IModelDecoration, IDecorationOptions } from './interfaces/IMonacoApi'
 export type { ISchemaRegistry } from './interfaces/ISchemaRegistry'
 export type { ISchemaWorker } from './interfaces/ISchemaWorker'
 export type { ISchemaParser } from './interfaces/ISchemaParser'

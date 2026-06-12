@@ -1,9 +1,8 @@
-import type { editor } from 'monaco-editor'
-import type { IMonacoApi } from '../interfaces/IMonacoApi'
+import type { IMonacoApi, ICodeEditorModel, IModelDecoration } from '../interfaces/IMonacoApi'
 import { Severity, type ValidationError } from '../types'
 
 /**
- * Maps ValidationError[] → Monaco IModelDeltaDecoration[].
+ * Maps ValidationError[] → Monaco decoration objects.
  * Receives IMonacoApi at construction — never touches window.monaco.
  */
 export class DecorationMapper {
@@ -11,8 +10,8 @@ export class DecorationMapper {
 
     toDecorations(
         errors: ValidationError[],
-        model: editor.ITextModel,
-    ): editor.IModelDeltaDecoration[] {
+        model: ICodeEditorModel,
+    ): IModelDecoration[] {
         return errors.map(error => {
             const lineCount = model.getLineCount()
             const safeLine = Math.max(1, Math.min(error.line, lineCount))
@@ -44,7 +43,7 @@ export class DecorationMapper {
                         position: 1 /* MinimapPosition.Inline */,
                     },
                 },
-            } satisfies editor.IModelDeltaDecoration
+            } satisfies IModelDecoration
         })
     }
 

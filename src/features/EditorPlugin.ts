@@ -1,5 +1,4 @@
-import type { editor } from 'monaco-editor'
-import type { IMonacoApi } from '../interfaces/IMonacoApi'
+import type { IMonacoApi, ICodeEditor } from '../interfaces/IMonacoApi'
 import type { ISchemaRegistry } from '../interfaces/ISchemaRegistry'
 import { SchemaCompleter } from '../completion/SchemaCompleter'
 import { SchemaDecorator } from '../validation/SchemaDecorator'
@@ -34,7 +33,7 @@ export class EditorPlugin {
 
     constructor(
         private readonly monacoApi: IMonacoApi,
-        private readonly codeEditor: editor.IStandaloneCodeEditor,
+        private readonly codeEditor: ICodeEditor,
         private readonly registry: ISchemaRegistry,
         private readonly options: EditorPluginOptions = {},
     ) {

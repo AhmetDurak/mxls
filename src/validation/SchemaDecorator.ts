@@ -1,6 +1,5 @@
-import type { editor } from 'monaco-editor'
 import { debounce } from 'ts-debounce'
-import type { IMonacoApi } from '../interfaces/IMonacoApi'
+import type { IMonacoApi, ICodeEditor, IModelDecoration } from '../interfaces/IMonacoApi'
 import type { ISchemaWorker } from '../interfaces/ISchemaWorker'
 import { SchemaValidator } from './SchemaValidator'
 import { DecorationMapper } from './DecorationMapper'
@@ -13,13 +12,13 @@ import { DecorationMapper } from './DecorationMapper'
 export class SchemaDecorator {
     private readonly validator = new SchemaValidator()
     private readonly mapper: DecorationMapper
-    private decorations: editor.IEditorDecorationsCollection
+    private decorations: { set(d: IModelDecoration[]): void; clear(): void }
     private readonly disposeListener: { dispose(): void }
     private getWorkers: (() => ISchemaWorker[]) | null = null
 
     constructor(
         monacoApi: IMonacoApi,
-        private readonly codeEditor: editor.IStandaloneCodeEditor,
+        private readonly codeEditor: ICodeEditor,
     ) {
         this.mapper = new DecorationMapper(monacoApi)
         this.decorations = codeEditor.createDecorationsCollection([])

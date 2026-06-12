@@ -1,6 +1,6 @@
 {
   "name": "@adrk/mxls",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Monaco XML Language Support — schema-driven autocomplete, validation, and template generation",
   "license": "MIT",
   "author": "Ahmet Durak",

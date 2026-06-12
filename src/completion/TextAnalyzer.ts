@@ -11,32 +11,53 @@ interface Scan {
     lastOpen: number
     lastClose: number
     inString: boolean
+    inComment: boolean
 }
 
 function scan(text: string): Scan {
     let inStr: string | null = null
+    let inComment = false
     let lastOpen = -1
     let lastClose = -1
 
     for (let i = 0; i < text.length; i++) {
         const ch = text[i]
+
+        if (inComment) {
+            // Wait for --> to close the comment
+            if (ch === '-' && text[i + 1] === '-' && text[i + 2] === '>') {
+                i += 2
+                inComment = false
+            }
+            continue
+        }
+
         if (inStr !== null) {
             if (ch === inStr) inStr = null
-        } else if (ch === '"' || ch === "'") {
+            continue
+        }
+
+        if (ch === '"' || ch === "'") {
             inStr = ch
         } else if (ch === '<') {
-            lastOpen = i
+            if (text[i + 1] === '!' && text[i + 2] === '-' && text[i + 3] === '-') {
+                inComment = true
+                i += 3
+            } else {
+                lastOpen = i
+            }
         } else if (ch === '>') {
             lastClose = i
         }
     }
 
-    return { lastOpen, lastClose, inString: inStr !== null }
+    return { lastOpen, lastClose, inString: inStr !== null, inComment }
 }
 
 function deriveType(text: string): CompletionType {
-    const { lastOpen, lastClose, inString } = scan(text)
+    const { lastOpen, lastClose, inString, inComment } = scan(text)
 
+    if (inComment) return CompletionType.none
     if (inString) return CompletionType.attributeValue
 
     const insideTag = lastOpen !== -1 && lastOpen > lastClose
@@ -77,7 +98,10 @@ export class TextAnalyzer {
                 case "'":
                     return CompletionType.attributeValue
                 case ' ':
-                    return CompletionType.incompleteAttribute
+                    // Only suggest attributes when cursor is actually inside an opening tag
+                    return deriveType(text) === CompletionType.incompleteAttribute
+                        ? CompletionType.incompleteAttribute
+                        : CompletionType.none
             }
         }
         return deriveType(text)

@@ -23,10 +23,12 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "require": "./dist/index.js"
+    },
+    "./style.css": "./style.css",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -36,12 +38,13 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "clear": "npx rimraf dist",
-    "build": "npm run clear && tsc -p tsconfig.build.json"
+    "typecheck": "tsc --noEmit",
+    "clear": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clear && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@prettier/plugin-xml": "^3.4.2",
-    "@types/turndown": "^5.0.6",
     "@xmldom/xmldom": "^0.9.10",
     "prettier": "^3.8.3",
     "ts-debounce": "^5.0.1",
@@ -51,7 +54,15 @@
     "monaco-editor": ">=0.30.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "vitest": "^2.0.0"
+    "@types/turndown": "^5.0.6",
+    "monaco-editor": "^0.57.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "overrides": {
+    "dompurify": "^3.4.17"
   }
 }

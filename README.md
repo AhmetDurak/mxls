@@ -26,10 +26,10 @@ Schema-driven autocomplete, real-time validation, template generation, and code 
 ## Installation
 
 ```bash
-npm install mxls monaco-editor @xmldom/xmldom ts-debounce prettier
+npm install @adrk/mxls monaco-editor
 ```
 
-Add squiggle styles (or `@import 'mxls/style.css'`):
+Add squiggle styles (or `@import '@adrk/mxls/style.css'`):
 
 ```css
 .xml-lint { border-width: 0; border-style: dotted; border-bottom-width: 3px; }
@@ -43,8 +43,8 @@ Add squiggle styles (or `@import 'mxls/style.css'`):
 ## Quick Start
 
 ```typescript
-import { SchemaRegistry, EditorPlugin } from 'mxls'
-import type { IMonacoApi } from 'mxls'
+import { SchemaRegistry, EditorPlugin } from '@adrk/mxls'
+import type { IMonacoApi } from '@adrk/mxls'
 
 function initEditor(editor: monaco.editor.IStandaloneCodeEditor, monacoApi: IMonacoApi): void {
     const registry = new SchemaRegistry(monacoApi)
